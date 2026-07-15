@@ -1,0 +1,636 @@
+/* style.css — LEXICON letterpress print-shop look.
+   Palette: ink-black field, warm newsprint text, oxidized copper accent,
+   press-red for mult, verdigris for "valid". Fraunces for display,
+   Space Mono for data. */
+
+:root {
+  --ink: #16120c;
+  --ink-2: #201a11;
+  --ink-3: #2b2416;
+  --paper: #e9dfc6;
+  --paper-2: #f2ead6;
+  --paper-dim: #a3987d;
+  --copper: #c17e3e;
+  --copper-hot: #eda85f;
+  --press-red: #c04a32;
+  --verdigris: #4fae96;
+  --brass: #8a6d3b;
+  --brass-dark: #57431f;
+  --gold: #d4a017;
+  --slug-hi: #4a4a52;
+  --slug-lo: #29292f;
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-mono: 'Space Mono', Consolas, monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--ink);
+  background-image: radial-gradient(ellipse at 50% -20%, #241d12 0%, var(--ink) 60%);
+  color: var(--paper);
+  font-family: var(--font-mono);
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+}
+
+.hidden { display: none !important; }
+
+/* ---- Layout ---------------------------------------------------------- */
+
+#app { display: flex; height: 100vh; }
+
+#sidebar {
+  width: 250px;
+  flex-shrink: 0;
+  padding: 22px;
+  background: var(--ink-2);
+  border-right: 1px solid var(--brass-dark);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+#table {
+  flex: 1;
+  min-width: 0; /* let the flex child shrink below its content width */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: 24px;
+  /* Fluid slug width: 56px normally, shrinks so all 12 rack tiles fit a
+     narrow pane. Sidebar is a fixed 250px; the rest accounts for padding
+     and inter-tile gaps. */
+  --tile-w: min(56px, calc((100vw - 396px) / 12));
+  --tile-h: calc(var(--tile-w) * 1.18);
+}
+
+/* ---- Sidebar --------------------------------------------------------- */
+
+#masthead {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 32px;
+  letter-spacing: 4px;
+  color: var(--paper);
+  text-shadow: 0 2px 0 #000;
+}
+
+#tagline {
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: var(--paper-dim);
+  border-bottom: 1px solid var(--brass-dark);
+  padding-bottom: 12px;
+}
+
+.panel {
+  background: var(--ink-3);
+  border: 1px solid var(--brass-dark);
+  border-radius: 4px;
+  padding: 8px 12px;
+}
+
+.panel-row { display: flex; justify-content: space-between; }
+
+.panel-label {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--paper-dim);
+}
+.panel-label.red { color: var(--press-red); }
+
+.panel-big {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 27px;
+  line-height: 1.15;
+}
+
+.panel-big.copper { color: var(--copper-hot); }
+
+.panel-sub { font-size: 11px; color: var(--paper-dim); }
+.panel-sub span { color: var(--paper); }
+
+.pips { font-size: 14px; letter-spacing: 3px; color: var(--copper); }
+.pips .spent-pip { color: var(--brass-dark); }
+
+#target-bar {
+  margin-top: 7px;
+  height: 7px;
+  background: var(--ink);
+  border: 1px solid var(--brass-dark);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+#target-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--copper), var(--copper-hot));
+  transition: width 0.5s ease;
+}
+
+/* Boss plaque */
+.panel.boss { border-color: var(--press-red); box-shadow: 0 0 12px rgba(192, 74, 50, 0.25); }
+.boss-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--press-red);
+}
+
+/* Books & consumables shelf */
+.shelf-list { font-size: 11px; line-height: 1.9; color: var(--paper); }
+.shelf-row { display: flex; align-items: center; gap: 6px; }
+.shelf-row .btn-tiny { margin-left: auto; }
+.dot { font-size: 9px; }
+.r-common { color: var(--paper-dim); }
+.r-uncommon { color: var(--verdigris); }
+.r-rare { color: var(--copper-hot); }
+
+#sidebar-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#pool-counts {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--paper-dim);
+}
+#pool-counts b { color: var(--paper); }
+
+/* ---- Readout --------------------------------------------------------- */
+
+#readout {
+  min-height: 84px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+#ro-word {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(24px, 5.5vw, 40px);
+  letter-spacing: 6px;
+  line-height: 1;
+  max-width: 100%;
+  text-align: center;
+}
+#ro-word.empty {
+  font-size: 13px;
+  font-family: var(--font-mono);
+  letter-spacing: 3px;
+  color: var(--paper-dim);
+  padding-top: 16px;
+}
+#ro-word.valid { color: var(--verdigris); text-shadow: 0 0 22px rgba(79, 174, 150, 0.35); }
+#ro-word.invalid { color: var(--paper-dim); opacity: 0.55; }
+
+#ro-math { font-size: 22px; letter-spacing: 1px; }
+#ro-points { color: var(--copper-hot); font-weight: 700; }
+.ro-x { color: var(--paper-dim); }
+#ro-mult { color: var(--press-red); font-weight: 700; }
+#ro-mult.flare { animation: red-flare 0.45s ease; }
+#ro-eq b { color: var(--paper); font-size: 26px; }
+
+@keyframes red-flare {
+  0%   { text-shadow: none; }
+  40%  { text-shadow: 0 0 24px var(--press-red); transform: scale(1.25); }
+  100% { text-shadow: none; }
+}
+
+/* ---- Composing stick -------------------------------------------------- */
+
+#stick {
+  display: flex;
+  gap: 6px;
+  padding: 12px 14px;
+  background: linear-gradient(180deg, #382b1a 0%, #2b2114 100%);
+  border: 2px solid var(--brass);
+  border-radius: 6px;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.6), 0 3px 10px rgba(0, 0, 0, 0.5);
+}
+
+.slot {
+  width: var(--tile-w, 56px);
+  height: var(--tile-h, 66px);
+  flex-shrink: 0;
+  border-radius: 4px;
+  background: var(--ink);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.8);
+  border: 1px solid var(--brass-dark);
+}
+
+/* ---- Tiles (cast lead slugs) ------------------------------------------ */
+
+#rack {
+  display: flex;
+  gap: 8px;
+  min-height: 76px;
+}
+
+.tile {
+  position: relative;
+  overflow: hidden;
+  width: var(--tile-w, 56px);
+  height: var(--tile-h, 66px);
+  flex-shrink: 0;
+  border-radius: 4px;
+  background: linear-gradient(160deg, var(--slug-hi) 0%, var(--slug-lo) 70%);
+  border: 1px solid #16161a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 3px 6px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.35s ease;
+}
+
+#rack .tile:hover { transform: translateY(-5px); }
+
+.tile .letter {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: calc(var(--tile-w, 56px) * 0.53);
+  color: var(--paper);
+  text-shadow: 0 1px 0 #000;
+}
+
+.tile .value {
+  position: absolute;
+  right: 5px;
+  bottom: 3px;
+  font-size: 10px;
+  color: var(--paper-dim);
+}
+
+/* Slug in a slot sits flush */
+.slot .tile { width: 100%; height: 100%; }
+
+/* Editions */
+.tile.foil { background: linear-gradient(130deg, #3c4a5c 0%, #2b3340 45%, #4a3a58 100%); }
+.tile.foil::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.22) 50%, transparent 70%);
+  animation: sheen 2.8s linear infinite;
+  pointer-events: none;
+}
+@keyframes sheen {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+.tile.gilt {
+  border-color: var(--gold);
+  box-shadow: inset 0 0 0 1px var(--gold), inset 0 1px 0 rgba(255, 255, 255, 0.14),
+              0 0 10px rgba(212, 160, 23, 0.35);
+}
+.tile.gilt .value { color: var(--gold); }
+
+/* The scoring sweep: each slug flares copper in sequence */
+.tile.flare { animation: copper-flare 0.4s ease; }
+.tile.scored {
+  background: linear-gradient(160deg, #6b4b28 0%, #3a2c18 70%);
+  box-shadow: inset 0 1px 0 rgba(255, 200, 120, 0.25), 0 0 14px rgba(193, 126, 62, 0.4);
+}
+.tile.scored .letter { color: var(--copper-hot); }
+
+@keyframes copper-flare {
+  0%   { box-shadow: 0 0 0 rgba(237, 168, 95, 0); }
+  45%  { box-shadow: 0 0 26px var(--copper-hot), inset 0 0 12px rgba(237, 168, 95, 0.5); transform: translateY(-6px) scale(1.08); }
+  100% { transform: none; }
+}
+
+/* Spent slugs drop off to the hellbox */
+.tile.spent { opacity: 0; transform: translateY(26px) rotate(4deg); }
+
+/* ---- Tile VARIANTS (material) — set the slug's body ------------------- */
+/* Paper: pale stock, dark ink, dog-eared corner marking its one use. */
+.tile.v-paper {
+  background: linear-gradient(160deg, #efe6cd 0%, #d8cba6 100%);
+  border-color: #b3a577;
+}
+.tile.v-paper .letter { color: var(--ink); text-shadow: none; }
+.tile.v-paper .value { color: #7a6f52; }
+.tile.v-paper::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  border-width: 0 10px 10px 0;
+  border-style: solid;
+  border-color: transparent var(--ink-2) transparent transparent;
+  opacity: 0.55;
+}
+/* Woodblock: warm cut timber. */
+.tile.v-woodblock { background: linear-gradient(160deg, #6b4a2a 0%, #3f2a15 75%); border-color: #22160a; }
+.tile.v-woodblock .letter { color: #f0dcc0; }
+/* Cornerstone: cold cut stone. */
+.tile.v-cornerstone { background: linear-gradient(160deg, #71767c 0%, #3c4045 75%); border-color: #23262a; }
+/* Ligature: verdigris braze, joined to its neighbours. */
+.tile.v-ligature { background: linear-gradient(160deg, #2f5d54 0%, #1b3a33 75%); border-color: var(--verdigris); }
+/* Deckle: torn, untrimmed edge. */
+.tile.v-deckle { border-style: dashed; border-color: #c9bd9f; border-radius: 4px 9px 5px 8px; }
+
+/* ---- Tile ALTERATIONS (styling) — override the letter ----------------- */
+/* Ordered AFTER variants so alteration colour wins on a dual-axis tile. */
+.tile.a-red .letter { color: var(--press-red); text-shadow: 0 0 9px rgba(192, 74, 50, 0.55); }
+.tile.a-comic .letter { font-family: 'Comic Sans MS', 'Comic Sans', 'Chalkboard SE', cursive; font-weight: 700; }
+.tile.a-bold .letter { -webkit-text-stroke: 1.4px currentColor; }
+.tile.a-italic .letter { font-style: italic; transform: skewX(-9deg); }
+.tile.a-underline .letter { text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 2px; }
+
+/* ---- Bench: reroll tray + controls -------------------------------------- */
+
+#bench {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 18px 28px;
+  max-width: 100%;
+}
+
+#tray-area { display: flex; flex-direction: column; gap: 5px; }
+
+.tray-label {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--paper-dim);
+}
+
+#tray {
+  display: flex;
+  gap: 5px;
+  padding: 7px 9px;
+  background: var(--ink-2);
+  border: 2px dashed var(--brass-dark);
+  border-radius: 6px;
+}
+
+#tray .slot { width: calc(var(--tile-w, 56px) * 0.8); height: calc(var(--tile-h, 66px) * 0.8); }
+#tray .tile .letter { font-size: calc(var(--tile-w, 56px) * 0.42); }
+#tray .tile .value { font-size: 9px; }
+
+/* ---- Controls --------------------------------------------------------- */
+
+#controls { display: flex; gap: 12px; }
+
+.btn {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 2px;
+  padding: 12px 26px;
+  border-radius: 4px;
+  border: 1px solid var(--brass);
+  background: var(--ink-3);
+  color: var(--paper);
+  cursor: pointer;
+  transition: background 0.12s ease, transform 0.08s ease;
+}
+
+.btn:hover:not(:disabled) { background: var(--brass-dark); }
+.btn:active:not(:disabled) { transform: translateY(2px); }
+
+.btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.btn-primary {
+  background: var(--copper);
+  border-color: var(--copper-hot);
+  color: var(--ink);
+}
+.btn-primary:hover:not(:disabled) { background: var(--copper-hot); }
+
+.btn-tiny {
+  font-size: 9px;
+  letter-spacing: 1px;
+  padding: 3px 8px;
+}
+
+#hint {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--paper-dim);
+  opacity: 0.7;
+}
+
+/* ---- Overlay (printed proof card) ------------------------------------- */
+
+#overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 8, 5, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+#overlay-card {
+  width: min(440px, 100%);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 3px;
+  padding: 36px 34px;
+  text-align: center;
+  box-shadow: 0 12px 44px rgba(0, 0, 0, 0.7);
+  border: 1px solid #c9bd9f;
+}
+
+#ov-title {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 32px;
+  letter-spacing: 2px;
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+#ov-body { font-size: 13px; line-height: 2; margin-bottom: 22px; }
+#ov-body b { font-size: 15px; }
+#ov-body .big-tickets {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--press-red);
+}
+
+/* ---- The Foundry (shop) ------------------------------------------------- */
+
+#shop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 8, 5, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9;
+  padding: 24px;
+}
+
+#shop-card {
+  width: min(880px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 3px;
+  padding: 28px 34px;
+  box-shadow: 0 12px 44px rgba(0, 0, 0, 0.7);
+  border: 1px solid #c9bd9f;
+}
+
+.shop-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 10px;
+}
+
+.shop-h h2 {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 30px;
+  letter-spacing: 3px;
+}
+
+.shop-tickets {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--press-red);
+}
+
+.shop-section-title {
+  font-size: 10px;
+  letter-spacing: 3px;
+  margin: 18px 0 8px;
+  color: #6b6250;
+}
+
+.shop-row { display: flex; gap: 12px; flex-wrap: wrap; }
+
+.shop-card {
+  border: 1px solid #b3a88e;
+  background: var(--paper-2);
+  padding: 12px;
+  width: 190px;
+  border-radius: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shop-card h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.shop-card .rarity { font-size: 9px; letter-spacing: 2px; }
+.shop-card .desc { font-size: 11px; line-height: 1.5; flex: 1; }
+
+/* Bag offers: hand-drawn pouch icon over the name. */
+.shop-card-bag { align-items: center; text-align: center; }
+.bag-icon svg { width: 52px; height: 52px; display: block; }
+.bag-icon.r-common { color: var(--brass-dark); }
+.bag-icon.r-uncommon { color: #2f7d68; }
+.bag-icon.r-rare { color: var(--copper); }
+
+.sold-out { font-size: 11px; color: #8f8778; font-style: italic; }
+
+.btn-buy {
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 7px 12px;
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.btn-buy:hover:not(:disabled) { background: var(--ink-3); }
+
+.sell-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 6px 0;
+  border-bottom: 1px dotted #b3a88e;
+}
+
+.shop-foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 22px;
+}
+
+/* ---- Toast ---------------------------------------------------------------- */
+
+#toast {
+  position: fixed;
+  bottom: 26px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink-3);
+  border: 1px solid var(--brass);
+  color: var(--paper);
+  padding: 9px 20px;
+  border-radius: 4px;
+  font-size: 12px;
+  letter-spacing: 1px;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+  z-index: 30;
+}
+#toast.show { opacity: 1; }
+
+/* ---- Loading ----------------------------------------------------------- */
+
+#loading {
+  position: fixed;
+  inset: 0;
+  background: var(--ink);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  z-index: 20;
+}
+
+#loading h1 {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 54px;
+  letter-spacing: 8px;
+}
+
+#loading-msg {
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: var(--paper-dim);
+  animation: pulse 1.4s ease infinite;
+}
+
+@keyframes pulse { 50% { opacity: 0.4; } }
