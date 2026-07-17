@@ -55,6 +55,7 @@ const CFG = {
   SHOP_BAG_OFFERS: 3,      // themed tile bags offered
   SHOP_CONSUMABLE_OFFERS: 2,
   RARITY_WEIGHTS: { common: 6, uncommon: 3, rare: 1 }, // shop draw odds
+  PROFILE_KEY: 'lexicon-profile', // localStorage key for lifetime unlock progress
   SELL_FACTOR: 0.5,        // Books sell for cost × this (floored, min 1)
   RESTOCK_COST: 2,         // reroll the shop's offers
   MIN_DECK_SIZE: 80,       // Hellbox Purge can't thin the deck below this

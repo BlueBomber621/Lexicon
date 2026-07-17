@@ -75,6 +75,13 @@ const Sfx = {
     });
   },
 
+  // A Book unlocking — little ascending library bell.
+  unlock() {
+    this._play(() => {
+      [660, 880, 1320].forEach((f, i) => this._note(f, 0.3, 'sine', 0.06, i * 0.13));
+    });
+  },
+
   lose() {
     this._play(() => {
       [220, 185, 147].forEach((f, i) => this._note(f, 0.3, 'sawtooth', 0.05, i * 0.16));

@@ -41,6 +41,7 @@ npx -y http-server -p 8123 -c-1 .
 | `js/game.js` | Run/round state, plays/rerolls/tray, boss modifiers, targets, tickets, consumables. |
 | `js/content.js` | Pure data: Books, bosses, consumables, tile **variants** + **alterations**, and shop **bags**. New content = new entry. |
 | `js/books.js` | `BookManager`: the trigger/effect interpreter; registers hooks on the choke point. |
+| `js/unlocks.js` | Permanent Book unlocks — lifetime profile in localStorage, event-driven checks. |
 | `js/shop.js` | The Foundry: offer generation, buy/sell/restock. |
 | `js/audio.js` | WebAudio synth sfx (patchwork layer — failures play silent). |
 | `js/ui.js` | DOM rendering, input, the scoring-sweep animation, shop screen. |
@@ -59,7 +60,10 @@ Emits `js/data/lexicon.data.js` (gzip+base64).
 1. **Core engine** — ✅ rack, stick, validation, scoring, deck cycle, UI shell.
 2. **Progression & bosses** — ✅ boss every 6th level, endless scaling.
 3. **Shop & Books** — ✅ trigger/effect framework, buy/sell, slots, rarity.
-4. **Content & juice** — ✅ 12 Books, two-axis tiles (5 variants × 5 alterations, stackable), themed shop bags with SVG art, consumables, synth audio, run stats.
+4. **Content & juice** — ✅ 28 Books (16 starting + 12 unlockable through play, with
+   per-Book SVG cover art and a Library collection screen), two-axis tiles
+   (5 variants × 5 alterations, stackable), themed shop bags with SVG art,
+   consumables, synth audio, run stats.
 
 ## Tiles: two axes
 

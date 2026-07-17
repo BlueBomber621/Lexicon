@@ -20,6 +20,7 @@ class UI {
       'stick', 'rack', 'tray', 'btn-forge', 'btn-reroll', 'btn-clear',
       'overlay', 'ov-title', 'ov-body', 'ov-btn',
       'shop', 'shop-card', 'toast', 'btn-mute',
+      'btn-library', 'library', 'library-card',
     ];
     this.els = {};
     for (const id of ids) this.els[id] = document.getElementById(id);
@@ -29,6 +30,10 @@ class UI {
     this.els['btn-clear'].addEventListener('click', () => this.onClear());
     this.els['ov-btn'].addEventListener('click', () => this.onOverlayButton());
     this.els['btn-mute'].addEventListener('click', () => this.onMute());
+    this.els['btn-library'].addEventListener('click', () => this.toggleLibrary());
+    this.els['library-card'].addEventListener('click', (e) => {
+      if (e.target.closest('[data-act="close-library"]')) this.toggleLibrary();
+    });
     // One delegated listener covers every shop button.
     this.els['shop-card'].addEventListener('click', (e) => this.onShopClick(e));
     this.els['cons-list'].addEventListener('click', (e) => this.onConsumableClick(e));
@@ -45,6 +50,23 @@ class UI {
     this.renderReadout();
     this.renderControls();
     this.renderShelf();
+    this.announceUnlocks();
+  }
+
+  // Drain the game's unlock queue into toasts + a fanfare.
+  announceUnlocks() {
+    if (this.game.newUnlocks.length === 0) return;
+    const names = this.game.newUnlocks.splice(0).map((b) => b.name).join(', ');
+    Sfx.unlock();
+    this.toast(`BOOK UNLOCKED — ${names}`);
+    this.els['btn-library'].textContent =
+      `LIBRARY ${this.game.unlocks.unlockedCount}/${BOOKS.length}`;
+  }
+
+  // A Book's cover art, at any size (DRY across shop, shelf, and library).
+  bookArt(book, cls = '') {
+    return `<span class="book-icon r-${book.rarity} ${cls}">` +
+      `<svg viewBox="0 0 48 60"><use href="#icon-book-${book.id}"/></svg></span>`;
   }
 
   renderStats() {
@@ -184,7 +206,7 @@ class UI {
     this.els['books-list'].innerHTML = g.books.shelf.length === 0 ? '&mdash;'
       : g.books.shelf.map((b) =>
           `<div class="shelf-row" title="${b.desc}">` +
-          `<span class="dot r-${b.rarity}">&#9670;</span> ${b.name}</div>`
+          `${this.bookArt(b, 'book-icon-sm')} ${b.name}</div>`
         ).join('');
 
     this.els['cons-list'].innerHTML = g.consumables.length === 0 ? '&mdash;'
@@ -192,6 +214,9 @@ class UI {
           `<div class="shelf-row" title="${c.desc}">${c.name}` +
           `<button class="btn btn-tiny" data-use="${i}">USE</button></div>`
         ).join('');
+
+    this.els['btn-library'].textContent =
+      `LIBRARY ${g.unlocks.unlockedCount}/${BOOKS.length}`;
   }
 
   toast(msg) {
@@ -282,6 +307,11 @@ class UI {
   onKey(e) {
     if (this.busy) return;
 
+    // Library open: Escape (or Enter) closes it, everything else is ignored.
+    if (!this.els['library'].classList.contains('hidden')) {
+      if (e.key === 'Escape' || e.key === 'Enter') this.toggleLibrary();
+      return;
+    }
     // Overlay open: Enter advances.
     if (!this.els['overlay'].classList.contains('hidden')) {
       if (e.key === 'Enter') this.onOverlayButton();
@@ -410,10 +440,12 @@ class UI {
     const bookCards = s.books.length === 0 ? '<p class="sold-out">Sold out.</p>'
       : s.books.map((b, i) => {
           const blocked = g.books.isFull ? 'SHELF FULL' : (!s.canAfford(b.cost) ? tk(b.cost) : null);
-          return `<div class="shop-card">
-            <h4><span class="dot r-${b.rarity}">&#9670;</span> ${b.name}</h4>
+          return `<div class="shop-card shop-card-book">
+            ${this.bookArt(b)}
+            <h4>${b.name}</h4>
             <div class="rarity r-${b.rarity}">${b.rarity.toUpperCase()}</div>
             <div class="desc">${b.desc}</div>
+            ${b.flavor ? `<div class="flavor">${b.flavor}</div>` : ''}
             <button class="btn btn-buy" data-act="book" data-i="${i}" ${blocked ? 'disabled' : ''}>
               ${blocked || 'BUY · ' + tk(b.cost)}</button>
           </div>`;
@@ -443,7 +475,7 @@ class UI {
 
     const shelfRows = g.books.shelf.length === 0 ? '<p class="sold-out">Your shelf is empty.</p>'
       : g.books.shelf.map((b) => `<div class="sell-row">
-          <span><span class="dot r-${b.rarity}">&#9670;</span> <b>${b.name}</b> — ${b.desc}</span>
+          <span>${this.bookArt(b, 'book-icon-sm')} <b>${b.name}</b> — ${b.desc}</span>
           <button class="btn btn-buy" data-act="sell" data-id="${b.id}">SELL · ${tk(g.books.sellValue(b))}</button>
         </div>`).join('');
 
@@ -464,6 +496,55 @@ class UI {
         <button class="btn btn-buy" data-act="restock" ${s.canAfford(CFG.RESTOCK_COST) ? '' : 'disabled'}>
           RESTOCK · ${tk(CFG.RESTOCK_COST)}</button>
         <button class="btn btn-primary" data-act="close">NEXT LEVEL &rarr;</button>
+      </div>`;
+  }
+
+  // --- The Library (Book collection) ----------------------------------------
+
+  toggleLibrary() {
+    const lib = this.els['library'];
+    if (lib.classList.contains('hidden')) {
+      this.renderLibrary();
+      lib.classList.remove('hidden');
+    } else {
+      lib.classList.add('hidden');
+    }
+    Sfx.click();
+  }
+
+  renderLibrary() {
+    const g = this.game;
+    const rarityOrder = { common: 0, uncommon: 1, rare: 2 };
+    const sorted = BOOKS.slice().sort((a, b) =>
+      rarityOrder[a.rarity] - rarityOrder[b.rarity] || a.name.localeCompare(b.name));
+
+    const cards = sorted.map((b) => {
+      const unlocked = g.unlocks.isUnlocked(b);
+      const owned = g.books.owns(b.id);
+      return `<div class="lib-card ${unlocked ? '' : 'locked'}">
+        ${this.bookArt(b, 'book-icon-lg')}
+        <div class="lib-name">${b.name}${owned ? ' <span class="lib-owned">&#9679; SHELVED</span>' : ''}</div>
+        <div class="rarity r-${b.rarity}">${b.rarity.toUpperCase()}</div>
+        <div class="desc">${unlocked ? b.desc : b.desc}</div>
+        ${unlocked
+          ? (b.flavor ? `<div class="flavor">${b.flavor}</div>` : '')
+          : `<div class="lib-lock">&#128274; ${b.unlock.desc}</div>`}
+      </div>`;
+    }).join('');
+
+    const p = g.unlocks.profile;
+    this.els['library-card'].innerHTML = `
+      <div class="shop-h">
+        <h2>THE LIBRARY</h2>
+        <div class="shop-tickets">${g.unlocks.unlockedCount}/${BOOKS.length} DISCOVERED</div>
+      </div>
+      <div class="lib-progress">Lifetime: ${p.wordsForged} words forged &middot;
+        ${p.rerollsUsed} rerolls &middot; ${p.purgedTiles} tiles destroyed &middot;
+        ${p.ticketsEarned} tickets &middot; ${p.bossesBeaten} bosses beaten</div>
+      <div class="lib-grid">${cards}</div>
+      <div class="shop-foot">
+        <span></span>
+        <button class="btn btn-primary" data-act="close-library">CLOSE</button>
       </div>`;
   }
 

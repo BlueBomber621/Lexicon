@@ -555,6 +555,28 @@ body {
 .bag-icon.r-uncommon { color: #2f7d68; }
 .bag-icon.r-rare { color: var(--copper); }
 
+/* Book covers: rarity-tinted vector art (sprite in index.html). */
+.book-icon { display: inline-block; line-height: 0; }
+.book-icon svg { width: 44px; height: 55px; display: block; }
+.book-icon.book-icon-sm svg { width: 15px; height: 19px; display: inline-block; vertical-align: -4px; }
+.book-icon.book-icon-lg svg { width: 56px; height: 70px; }
+.book-icon.r-common { color: #6b6250; }
+.book-icon.r-uncommon { color: #2f7d68; }
+.book-icon.r-rare { color: var(--copper); }
+/* On the dark sidebar, lift the tint so covers stay readable. */
+#sidebar .book-icon.r-common { color: var(--paper-dim); }
+#sidebar .book-icon.r-uncommon { color: var(--verdigris); }
+#sidebar .book-icon.r-rare { color: var(--copper-hot); }
+
+.shop-card-book { align-items: center; text-align: center; }
+
+.flavor {
+  font-size: 10px;
+  font-style: italic;
+  line-height: 1.45;
+  color: #8f8778;
+}
+
 .sold-out { font-size: 11px; color: #8f8778; font-style: italic; }
 
 .btn-buy {
@@ -582,6 +604,86 @@ body {
   display: flex;
   justify-content: space-between;
   margin-top: 22px;
+}
+
+/* ---- The Library (Book collection) -------------------------------------- */
+
+#library {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 8, 5, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 11; /* above the shop, so it can be browsed from anywhere */
+  padding: 24px;
+}
+
+#library-card {
+  width: min(960px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 3px;
+  padding: 28px 34px;
+  box-shadow: 0 12px 44px rgba(0, 0, 0, 0.7);
+  border: 1px solid #c9bd9f;
+}
+
+.lib-progress {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #6b6250;
+  margin: 10px 0 16px;
+}
+
+.lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.lib-card {
+  border: 1px solid #b3a88e;
+  background: var(--paper-2);
+  border-radius: 3px;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 5px;
+}
+
+.lib-card .desc { font-size: 10px; line-height: 1.5; }
+
+.lib-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.lib-owned {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: var(--verdigris);
+}
+
+/* Locked: cover in shadow, effect hidden behind the unlock condition. */
+.lib-card.locked { opacity: 0.85; background: #ddd3ba; }
+.lib-card.locked .book-icon { filter: grayscale(1) brightness(0.55); }
+.lib-card.locked .desc { opacity: 0.45; }
+
+.lib-lock {
+  font-size: 9.5px;
+  letter-spacing: 0.5px;
+  line-height: 1.45;
+  color: var(--press-red);
+  border-top: 1px dotted #b3a88e;
+  padding-top: 5px;
 }
 
 /* ---- Toast ---------------------------------------------------------------- */

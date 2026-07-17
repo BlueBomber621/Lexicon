@@ -1,8 +1,8 @@
 // books.js — the Book shelf and the trigger/effect interpreter.
 // A Book is one config entry in content.js; this class is the only code
 // that reads those entries. Scoring effects are applied through hooks on
-// the ScoringEngine choke point; round-start effects are applied directly
-// to the game when a round begins.
+// the ScoringEngine choke point; economy effects are applied directly to
+// the game at their moment (round start, reroll fired, round won).
 
 class BookManager {
 
@@ -57,26 +57,46 @@ class BookManager {
         this.unregisters.push(this.game.scoring.register(
           'onWordForged', (ctx) => this.applyEffect(book, ctx, null)));
       }
-      // roundStart Books have no scoring hook; see onRoundStart().
+      // roundStart / reroll / roundWin Books have no scoring hook;
+      // see the economy moments below.
     }
   }
 
-  // Round-economy effects (+plays, +rerolls, +tickets at round start).
+  // Shared economy applier — plays / rerolls / tickets straight to the game.
+  applyEconomy(effect) {
+    if (!effect) return;
+    if (effect.plays) this.game.plays += effect.plays;
+    if (effect.rerolls) this.game.rerolls += effect.rerolls;
+    if (effect.tickets) this.game.tickets += effect.tickets;
+  }
+
+  // Round-start moment: roundStart-trigger Books fire their effect, and any
+  // scoring Book with a `roundStart` rider (e.g. Incunabula's -1 play) pays it.
   onRoundStart() {
     for (const book of this.shelf) {
-      if (book.trigger !== 'roundStart') continue;
-      const e = book.effect;
-      if (e.plays) this.game.plays += e.plays;
-      if (e.rerolls) this.game.rerolls += e.rerolls;
-      if (e.tickets) this.game.tickets += e.tickets;
+      this.applyEconomy(book.trigger === 'roundStart' ? book.effect : book.roundStart);
+    }
+  }
+
+  // Reroll fired / level cleared moments.
+  onReroll() {
+    for (const book of this.shelf) {
+      if (book.trigger === 'reroll') this.applyEconomy(book.effect);
+    }
+  }
+
+  onRoundWin() {
+    for (const book of this.shelf) {
+      if (book.trigger === 'roundWin') this.applyEconomy(book.effect);
     }
   }
 
   // The shared effect interpreter — the whole Book vocabulary lives here:
-  // add points, add mult, multiply mult, grant tickets.
+  // add points, add mult, multiply mult, grant tickets. Value functions
+  // receive (ctx, step, game) so effects can read live game state.
   applyEffect(book, ctx, step) {
-    if (book.when && !book.when(ctx, step)) return;
-    const val = (v) => (typeof v === 'function' ? v(ctx, step) : v);
+    if (book.when && !book.when(ctx, step, this.game)) return;
+    const val = (v) => (typeof v === 'function' ? v(ctx, step, this.game) : v);
     const e = book.effect;
 
     if (e.points != null) {

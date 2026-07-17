@@ -9,6 +9,8 @@ class Game {
     this.dict = dictionary;
     this.scoring = new ScoringEngine();
     this.books = new BookManager(this);
+    this.unlocks = new Unlocks(this);
+    this.newUnlocks = []; // Books earned this session, queued for the UI to announce
     this.newRun();
   }
 
@@ -21,9 +23,10 @@ class Game {
     this.books.clear();
     this.consumables = [];
     this.lastBossId = null;
+    this.runWords = new Set(); // every word forged this run (Errata's unlock)
     this.stats = {
       wordsForged: 0, bestWord: '—', bestScore: 0,
-      bossesBeaten: 0, ticketsEarnedTotal: 0,
+      bossesBeaten: 0, ticketsEarnedTotal: 0, tilesDestroyed: 0,
     };
     this.startRound();
   }
@@ -39,8 +42,12 @@ class Game {
     this.roundScore = 0;
     this.roundLongest = 0;
     this.lastTicketsEarned = 0;
+    this.wordsThisRound = 0; // Second Impression reads this while scoring
+    this.lastWord = null;    // previous word this round (Errata reads it)
     if (this.isBossLevel) this.applyBoss(); // boss bends economy first...
     this.books.onRoundStart();              // ...then roundStart Books apply
+    this.plays = Math.max(1, this.plays);   // Incunabula etc. can't zero you out
+    this.rerolls = Math.max(0, this.rerolls);
     this.state = 'playing'; // 'playing' | 'roundWon' | 'gameOver'
   }
 
@@ -155,6 +162,8 @@ class Game {
     this.rack.push(...this.deck.draw(returned.length));
     this.deck.toBag(returned);
     this.rerolls--;
+    this.books.onReroll(); // reroll-trigger Books (Salvage Slip) pay out
+    this.newUnlocks.push(...this.unlocks.notify('reroll'));
     return true;
   }
 
@@ -163,8 +172,11 @@ class Game {
   purgeTray() {
     if (this.tray.length === 0) return false;
     if (this.deck.all.length - this.tray.length < CFG.MIN_DECK_SIZE) return false;
-    this.deck.destroy(this.tray.splice(0));
+    const gone = this.tray.splice(0);
+    this.deck.destroy(gone);
+    this.stats.tilesDestroyed += gone.length; // Hellbox Codex reads this
     this.refill();
+    this.newUnlocks.push(...this.unlocks.notify('purge', { n: gone.length }));
     return true;
   }
 
@@ -190,11 +202,18 @@ class Game {
   // Forge the composed word. Caller must have checked validity.
   // Returns { result, outcome } where outcome is 'continue' | 'won' | 'lost'.
   forge() {
+    // Scoring happens FIRST: Second Impression / Errata read wordsThisRound
+    // and lastWord as they stood before this word.
     const result = this.scoring.score(this.stick.slice(), { commit: true });
 
     this.plays--;
     this.roundScore += result.total;
     this.roundLongest = Math.max(this.roundLongest, result.word.length);
+
+    const repeat = this.runWords.has(result.word); // Errata's unlock condition
+    this.runWords.add(result.word);
+    this.lastWord = result.word;
+    this.wordsThisRound++;
 
     this.stats.wordsForged++;
     if (result.total > this.stats.bestScore) {
@@ -207,8 +226,14 @@ class Game {
     const played = this.stick.splice(0);
     const oneUse = played.filter((t) => VARIANTS[t.variant] && VARIANTS[t.variant].oneUse);
     this.deck.toDiscard(played.filter((t) => !oneUse.includes(t)));
-    if (oneUse.length) this.deck.destroy(oneUse);
+    if (oneUse.length) {
+      this.deck.destroy(oneUse);
+      this.stats.tilesDestroyed += oneUse.length; // Paper feeds Hellbox Codex too
+    }
     this.refill();
+
+    this.newUnlocks.push(...this.unlocks.notify('forge',
+      { word: result.word, total: result.total, repeat }));
 
     let outcome = 'continue';
     if (this.roundScore >= this.target) {
@@ -219,6 +244,9 @@ class Game {
       this.lastTicketsEarned = this.roundLongest * CFG.TICKETS_PER_LETTER;
       this.tickets += this.lastTicketsEarned;
       this.stats.ticketsEarnedTotal += this.lastTicketsEarned;
+      this.books.onRoundWin(); // roundWin-trigger Books (Atlas of Type) pay out
+      this.newUnlocks.push(...this.unlocks.notify('roundWin',
+        { wasBoss: this.isBossLevel, tickets: this.lastTicketsEarned }));
     } else if (this.plays === 0) {
       outcome = 'lost';
       this.state = 'gameOver';

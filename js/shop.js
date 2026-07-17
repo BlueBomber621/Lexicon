@@ -21,9 +21,10 @@ class Shop {
     this.consumables = this.pickConsumables(CFG.SHOP_CONSUMABLE_OFFERS);
   }
 
-  // Rarity-weighted draw of Books the player doesn't own, no duplicates.
+  // Rarity-weighted draw of UNLOCKED Books the player doesn't own, no duplicates.
   pickBooks(n) {
-    const pool = BOOKS.filter((b) => !this.game.books.owns(b.id));
+    const pool = BOOKS.filter((b) =>
+      !this.game.books.owns(b.id) && this.game.unlocks.isUnlocked(b));
     const out = [];
     while (out.length < n && pool.length > 0) {
       const weighted = [];
