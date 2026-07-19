@@ -24,7 +24,7 @@ class UI {
       'ro-word', 'ro-math', 'ro-points', 'ro-mult', 'ro-eq', 'ro-total',
       'stick', 'rack', 'tray', 'btn-forge', 'btn-reroll', 'btn-clear',
       'overlay', 'ov-title', 'ov-body', 'ov-btn',
-      'shop', 'shop-card', 'toast', 'btn-mute',
+      'shop', 'shop-card', 'toast', 'achievements', 'btn-mute',
       'btn-library', 'library', 'library-card',
       'btn-bagcheck', 'bagcheck', 'bagcheck-card',
       'picker', 'picker-card',
@@ -92,6 +92,7 @@ class UI {
   // Drain the game's unlock queue into toasts + a fanfare. Plain notes
   // (a sticker landing, etc.) queue up the same way.
   announceUnlocks() {
+    this.drainAchievements();
     if (this.game.pendingNotes.length > 0) {
       this.toast(this.game.pendingNotes.splice(0).join('  ·  '));
     }
@@ -102,6 +103,32 @@ class UI {
     this.toast(fresh.map(label).join('  ·  '));
     this.els['btn-library'].textContent =
       `LIBRARY ${this.game.unlocks.unlockedCount}/${BOOKS.length}`;
+  }
+
+  // Pop up any achievements earned since the last drain (called from the
+  // announce path on every render, plus after shop actions that don't render).
+  drainAchievements() {
+    if (!this.game.newAchievements || this.game.newAchievements.length === 0) return;
+    const fresh = this.game.newAchievements.splice(0);
+    Sfx.unlock();
+    for (const a of fresh) this.showAchievement(a);
+  }
+
+  // One corner pop-up — icon, title, task — that fades and removes itself.
+  showAchievement(a) {
+    const layer = this.els['achievements'];
+    if (!layer) return;
+    const pop = document.createElement('div');
+    pop.className = 'ach-pop';
+    pop.innerHTML =
+      `<span class="ach-icon"><svg viewBox="0 0 48 48"><use href="#${a.icon}"/></svg></span>` +
+      `<div class="ach-text">` +
+        `<div class="ach-eyebrow">ACHIEVEMENT UNLOCKED</div>` +
+        `<div class="ach-title">${a.title}</div>` +
+        `<div class="ach-desc">${a.desc}</div>` +
+      `</div>`;
+    layer.appendChild(pop);
+    setTimeout(() => pop.remove(), 4700); // outlives the ach-life animation
   }
 
   // A Book's cover art, at any size, with an optional corner sticker
@@ -358,6 +385,7 @@ class UI {
       wordEl.textContent = 'SET TYPE TO FORGE A WORD';
       wordEl.className = 'empty';
       mathEl.classList.add('hidden');
+      this.clearWordFx();
       return;
     }
 
@@ -375,6 +403,94 @@ class UI {
     } else {
       mathEl.classList.add('hidden');
     }
+
+    // Valid words get the length colour scale + drifting mini-letter particles;
+    // anything else resets both.
+    if (status === 'valid' && preview) {
+      const color = this.applyWordColor(preview.word.length);
+      this.ensureWordParticles(preview.word, color);
+    } else {
+      this.clearWordFx();
+    }
+  }
+
+  // Colour the composed word by its length and return the particle colour.
+  // Scale: mid-blue (<=3) -> light-blue (4-5) -> light-blue→magenta gradient
+  // (6-8) -> magenta→pink gradient (9-11). Gradients clip to the glyphs.
+  applyWordColor(len) {
+    const el = this.els['ro-word'];
+    const MIDBLUE = '#3f7fd0', LIGHTBLUE = '#7cc4ff', MAGENTA = '#d24be0', PINK = '#ff8fce';
+    let fill, glow, particle;
+    if (len <= 3) { fill = MIDBLUE; glow = MIDBLUE; particle = MIDBLUE; }
+    else if (len <= 5) { fill = LIGHTBLUE; glow = LIGHTBLUE; particle = LIGHTBLUE; }
+    else if (len <= 8) { fill = `linear-gradient(95deg, ${LIGHTBLUE}, ${MAGENTA})`; glow = MAGENTA; particle = MAGENTA; }
+    else { fill = `linear-gradient(95deg, ${MAGENTA}, ${PINK})`; glow = PINK; particle = PINK; }
+
+    if (fill.startsWith('linear')) {
+      el.style.backgroundImage = fill;
+      el.style.color = 'transparent';
+    } else {
+      el.style.backgroundImage = 'none';
+      el.style.color = fill;
+    }
+    el.style.textShadow = `0 0 20px ${glow}73`; // 0x73 ≈ 45% alpha
+    return particle;
+  }
+
+  // Undo applyWordColor's inline styling and stop the particle emitter.
+  clearWordFx() {
+    const el = this.els['ro-word'];
+    el.style.backgroundImage = '';
+    el.style.color = '';
+    el.style.textShadow = '';
+    this.stopWordParticles();
+  }
+
+  // Keep the mini-letter emitter running for the current word (starting it if
+  // needed); it spawns more particles for longer words.
+  ensureWordParticles(word, color) {
+    if (this.reduceMotion) return;
+    if (!this._wp) this._wp = {};
+    this._wp.word = word;
+    this._wp.color = color;
+    if (this._wp.timer) return;
+    this._wp.timer = setInterval(() => this.emitWordParticles(), 165);
+    this.emitWordParticles(); // one right away so it feels responsive
+  }
+
+  stopWordParticles() {
+    if (this._wp && this._wp.timer) {
+      clearInterval(this._wp.timer);
+      this._wp.timer = null;
+    }
+  }
+
+  // Shed a few tiny copies of the word's own letters from the readout — count
+  // scales with word length ("more letters to emit").
+  emitWordParticles() {
+    const wp = this._wp;
+    const el = this.els['ro-word'];
+    if (!wp || !wp.word || !el) return;
+    const r = el.getBoundingClientRect();
+    if (r.width < 2) return; // laid out yet?
+    const len = wp.word.length;
+    const n = Math.max(1, Math.min(6, Math.round(len / 2)));
+    const frag = document.createDocumentFragment();
+    for (let k = 0; k < n; k++) {
+      const p = document.createElement('span');
+      p.className = 'wordfx';
+      p.textContent = wp.word[Math.floor(Math.random() * len)];
+      p.style.left = `${r.left + Math.random() * r.width}px`;
+      p.style.top = `${r.top + r.height * 0.5}px`;
+      p.style.color = wp.color;
+      p.style.setProperty('--dx', `${(Math.random() * 90 - 45).toFixed(0)}px`);
+      p.style.setProperty('--dy', `${(-24 - Math.random() * 54).toFixed(0)}px`);
+      p.style.setProperty('--rot', `${(Math.random() * 44 - 22).toFixed(0)}deg`);
+      p.style.fontSize = `${(10 + Math.random() * 9).toFixed(0)}px`;
+      frag.appendChild(p);
+      setTimeout(() => p.remove(), 1500);
+    }
+    document.body.appendChild(frag);
   }
 
   renderControls() {
@@ -694,6 +810,7 @@ class UI {
   async onForge() {
     if (this.busy || this.game.stickStatus() !== 'valid') return;
     this.busy = true;
+    this.stopWordParticles(); // the word's about to be spent; stop shedding letters
     this.renderControls();
 
     const { result, outcome } = this.game.forge();
@@ -1445,5 +1562,6 @@ class UI {
     this.renderShop();
     this.renderStats();
     this.renderShelf();
+    this.drainAchievements(); // a shop sticker can earn one; shop skips render()
   }
 }

@@ -104,7 +104,7 @@ class BookManager {
   // (The Rulebook's unlock) sees all of them.
   applySticker(bookId, stickerId) {
     this.stickers[bookId] = stickerId;
-    this.game.newUnlocks.push(...this.game.unlocks.notify('sticker', { stickerId }));
+    this.game.progress('sticker', { stickerId });
   }
 
   // Every letter substitution the shelf allows, merged into one map of

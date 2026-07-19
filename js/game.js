@@ -10,9 +10,20 @@ class Game {
     this.scoring = new ScoringEngine();
     this.books = new BookManager(this);
     this.unlocks = new Unlocks(this);
+    this.achievements = new Achievements(this);
     this.newUnlocks = []; // Books earned this session, queued for the UI to announce
+    this.newAchievements = []; // achievements earned this session, queued for the UI
     this.pendingNotes = []; // one-off messages for the UI to toast (Sticky Note, ...)
     this.newRun();
+  }
+
+  // Fan a play event out to BOTH progress trackers (unlocks first, so its
+  // lifetime counters are fresh when achievement tests read them), queueing
+  // anything freshly earned for the UI to announce. Every place that used to
+  // call unlocks.notify directly goes through here now.
+  progress(event, data = {}) {
+    this.newUnlocks.push(...this.unlocks.notify(event, data));
+    this.newAchievements.push(...this.achievements.notify(event, data));
   }
 
   // --- Run / round lifecycle -----------------------------------------
@@ -23,7 +34,7 @@ class Game {
     // Count the run being left behind, but only if it was actually played —
     // so booting up and picking a case doesn't burn a run.
     if (this.stats && this.stats.wordsForged > 0) {
-      this.newUnlocks.push(...this.unlocks.notify('runEnd', {}));
+      this.progress('runEnd', {});
     }
     this.deckDef = DECKS.find((d) => d.id === (deckId || this.unlocks.profile.lastDeck))
       || DECKS[0];
@@ -66,7 +77,7 @@ class Game {
     // `tiles` rides along so Books can inspect what was broken (The Shredded
     // Book counts Paper slugs specifically).
     this.books.dispatchGrow('destroy', { n: tiles.length, source, tiles });
-    this.newUnlocks.push(...this.unlocks.notify('destroy', { n: tiles.length, source, tiles }));
+    this.progress('destroy', { n: tiles.length, source, tiles });
   }
 
   startRound() {
@@ -289,7 +300,7 @@ class Game {
     this.rerolls--;
     this.books.onReroll(); // reroll-trigger Books (Salvage Slip) pay out
     this.books.dispatchGrow('reroll'); // The Bellows swells
-    this.newUnlocks.push(...this.unlocks.notify('reroll'));
+    this.progress('reroll');
     return true;
   }
 
@@ -450,8 +461,8 @@ class Game {
     if (this.boss && this.boss.onDraw) this.boss.onDraw(this, this.bossState); // Foreman demands anew
 
     this.books.dispatchGrow('forge', { word: result.word, total: result.total });
-    this.newUnlocks.push(...this.unlocks.notify('forge',
-      { word: result.word, total: result.total, mult: result.mult, repeat }));
+    this.progress('forge',
+      { word: result.word, total: result.total, mult: result.mult, repeat });
 
     let outcome = 'continue';
     if (this.roundScore >= this.target) {
@@ -471,9 +482,9 @@ class Game {
       this.lastTicketsEarned = this.lastPayout.reduce((sum, p) => sum + p.amount, 0);
       this.stats.ticketsEarnedTotal += this.lastTicketsEarned;
       this.books.dispatchGrow('roundWin', { wasBoss: this.isBossLevel }); // First Edition appreciates
-      this.newUnlocks.push(...this.unlocks.notify('roundWin',
+      this.progress('roundWin',
         { wasBoss: this.isBossLevel, tickets: this.lastTicketsEarned,
-          bossId: this.boss ? this.boss.id : null, bossesThisRun: this.bossesThisRun }));
+          bossId: this.boss ? this.boss.id : null, bossesThisRun: this.bossesThisRun });
     } else if (this.plays === 0) {
       outcome = 'lost';
       this.state = 'gameOver';

@@ -1576,3 +1576,92 @@ body {
   .shelf-book.trigger-pulse .book-icon::before,
   .shelf-book.copy-pulse .book-icon::before { animation: none !important; }
 }
+
+/* ---- Word display: drifting mini-letter particles ----------------------- */
+/* While a valid word is set, the readout sheds tiny copies of its own letters.
+   JS (UI.emitWordParticles) spawns them, more for longer words, coloured to
+   match the length scale; --dx / --dy / --rot carry each one's drift. */
+@keyframes wordfx-drift {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.55) rotate(0deg); }
+  18%  { opacity: 0.72; }
+  100% { opacity: 0; transform: translate(-50%, -50%) translate(var(--dx, 0), var(--dy, -40px)) scale(1.05) rotate(var(--rot, 0deg)); }
+}
+.wordfx {
+  position: fixed;
+  z-index: 3; /* ambient: above the table, below the score-pops (40) & modals */
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 0 8px currentColor;
+  animation: wordfx-drift 1.45s ease-out forwards;
+  will-change: transform, opacity;
+}
+
+/* The composed-word colour scale is applied inline by JS (UI.applyWordColor):
+   mid-blue (short) -> light-blue (4-5) -> light-blue→magenta gradient (6-8)
+   -> magenta→pink gradient (9-11). Gradient fills clip to the glyphs. */
+#ro-word.valid { background-clip: text; -webkit-background-clip: text; }
+
+/* ---- Achievement pop-ups (corner) --------------------------------------- */
+#achievements {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none; /* never block the sticky status rail beneath */
+  max-width: min(330px, 82vw);
+}
+
+@keyframes ach-life {
+  0%   { opacity: 0; transform: translateX(46px) scale(0.94); }
+  7%   { opacity: 1; transform: translateX(0) scale(1); }
+  86%  { opacity: 1; transform: translateX(0) scale(1); }
+  100% { opacity: 0; transform: translateX(22px) scale(0.98); }
+}
+.ach-pop {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(180deg, var(--ink-3) 0%, var(--ink-2) 100%);
+  border: 1px solid var(--copper);
+  border-left: 4px solid var(--gold);
+  border-radius: 6px;
+  padding: 11px 15px 11px 12px;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.55);
+  animation: ach-life 4.6s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+.ach-icon {
+  flex-shrink: 0;
+  color: var(--gold);
+  filter: drop-shadow(0 0 6px rgba(212, 160, 23, 0.5));
+}
+.ach-icon svg { width: 42px; height: 42px; display: block; }
+.ach-eyebrow {
+  font-size: 8px;
+  letter-spacing: 2.5px;
+  color: var(--copper-hot);
+  margin-bottom: 2px;
+}
+.ach-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.1;
+  color: var(--paper);
+}
+.ach-desc { font-size: 10.5px; line-height: 1.4; color: var(--paper-dim); margin-top: 2px; }
+
+@media (max-width: 860px) {
+  #achievements { top: 8px; right: 8px; left: 8px; max-width: none; }
+  .ach-title { font-size: 14px; }
+  .ach-icon svg { width: 36px; height: 36px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wordfx { display: none !important; }
+  .ach-pop { animation: ach-life 4.6s linear forwards; } /* keep the fade, drop the slide feel is minor — still gentle */
+}
