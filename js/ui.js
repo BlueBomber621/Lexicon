@@ -28,7 +28,7 @@ class UI {
       'btn-bagcheck', 'bagcheck', 'bagcheck-card',
       'picker', 'picker-card',
       'deckpick', 'deckpick-card',
-      'hovertip', 'btn-reset', 'reset', 'reset-card',
+      'hovertip', 'btn-reset', 'reset', 'reset-card', 'hint',
     ];
     this.els = {};
     for (const id of ids) this.els[id] = document.getElementById(id);
@@ -55,10 +55,18 @@ class UI {
     this.els['btn-reset'].addEventListener('click', () => this.openReset());
     this.els['reset-card'].addEventListener('click', (e) => this.onResetClick(e));
     document.addEventListener('keydown', (e) => this.onKey(e));
-    // Delegated hover tooltips for slugs and Books.
+    // Tooltips: hover where a mouse exists, long-press everywhere (hybrid
+    // laptops get both), and a tap on empty space dismisses.
     this.tipAnchor = null;
-    document.addEventListener('mouseover', (e) => this.onHover(e));
-    document.addEventListener('mouseout', (e) => { if (!e.relatedTarget) this.hideTip(); });
+    if (window.matchMedia('(hover: hover)').matches) {
+      document.addEventListener('mouseover', (e) => this.onHover(e));
+      document.addEventListener('mouseout', (e) => { if (!e.relatedTarget) this.hideTip(); });
+    }
+    document.addEventListener('pointerdown', (e) => {
+      if (!e.target.closest('.tile, .shelf-book')) this.hideTip();
+    });
+    this.syncHint();
+    window.addEventListener('resize', () => this.syncHint());
   }
 
   // --- Rendering -------------------------------------------------------
@@ -211,6 +219,23 @@ class UI {
     this.tipAnchor = null;
   }
 
+  // Show the gesture hint on touch-ish setups (coarse pointer, or simply a
+  // narrow screen where the touch layout is what you're looking at).
+  syncHint() {
+    const touchy = window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 860;
+    this.els['hint'].innerHTML = touchy
+      ? 'Tap slugs to compose &middot; swipe a slug down for the reroll tray &middot; hold for details &middot; drag Books to reorder'
+      : 'Click / type = compose &middot; right-click or shift-click = reroll tray (3 fires it) &middot; Space = reroll &middot; Enter = forge';
+  }
+
+  // A gesture (long-press, swipe) already handled this touch — swallow the
+  // click the browser fires afterwards. Returns true when it did so.
+  takeClick() {
+    if (!this.suppressClick) return false;
+    this.suppressClick = false;
+    return true;
+  }
+
   // One delegated handler: swap the tip only when the hovered anchor changes,
   // so moving within an element (or over its children) never flickers.
   onHover(e) {
@@ -276,7 +301,9 @@ class UI {
       const tile = tiles[i];
       if (tile) {
         const wrap = this.wrapTile(tile, `${zone}#${i}`);
-        wrap.firstChild.addEventListener('click', () => onTileClick(tile));
+        const el = wrap.firstChild;
+        el.addEventListener('pointerdown', (ev) => this.onTilePointerDown(ev, tile, el, zone));
+        el.addEventListener('click', () => { if (!this.takeClick()) onTileClick(tile); });
         slot.appendChild(wrap);
       }
       container.appendChild(slot);
@@ -305,7 +332,8 @@ class UI {
       const x = n > 1 ? (i / (n - 1)) * 2 - 1 : 0;
       wrap.style.marginTop = (7 * (1 - x * x)).toFixed(1) + 'px';
       const el = wrap.firstChild;
-      el.addEventListener('click', (e) => this.onRackTileClick(tile, e));
+      el.addEventListener('pointerdown', (ev) => this.onTilePointerDown(ev, tile, el, 'rack'));
+      el.addEventListener('click', (e) => { if (!this.takeClick()) this.onRackTileClick(tile, e); });
       el.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         this.onSendToTray(tile);
@@ -369,28 +397,27 @@ class UI {
         const status = book.status ? book.status(g.books.stateOf(book), g) : null;
         const el = document.createElement('div');
         el.className = 'shelf-book';
-        el.draggable = true;
-        el.dataset.bookIdx = i; // hover-tooltip anchor
+        el.dataset.bookIdx = i; // hover-tooltip anchor + drag identity
         el.style.setProperty('--float-dur', (3 + (i % 4) * 0.4) + 's');
         el.style.setProperty('--float-delay', (-(i * 0.7)) + 's');
         el.innerHTML = this.bookArt(book, '', sticker)
           + `<span class="shelf-book-name">${book.name}</span>`
           + (status ? `<span class="book-status">${status}</span>` : '');
-        el.addEventListener('dragstart', (e) => {
-          this.dragIdx = i;
-          el.classList.add('dragging');
-          e.dataTransfer.effectAllowed = 'move';
-        });
-        el.addEventListener('dragend', () => el.classList.remove('dragging'));
-        el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('drag-over'); });
-        el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
-        el.addEventListener('drop', (e) => {
-          e.preventDefault();
-          if (this.dragIdx != null && this.game.books.reorder(this.dragIdx, i)) {
-            Sfx.click();
-            this.render(); // order changed: re-render shelf AND the live preview
-          }
-          this.dragIdx = null;
+        // Pointer-based drag: one code path for mouse AND touch (HTML5 drag
+        // events never fire on touch screens).
+        el.addEventListener('pointerdown', (e) => this.onShelfPointerDown(e, i, el));
+        // Long-press a Book for its details (a hold, not a drag).
+        el.addEventListener('pointerdown', () => {
+          const t = setTimeout(() => this.showTip(el, this.bookTip(book)), 420);
+          const done = () => {
+            clearTimeout(t);
+            el.removeEventListener('pointerup', done);
+            el.removeEventListener('pointermove', done);
+            el.removeEventListener('pointercancel', done);
+          };
+          el.addEventListener('pointerup', done);
+          el.addEventListener('pointermove', done);
+          el.addEventListener('pointercancel', done);
         });
         slot.appendChild(el);
       }
@@ -414,6 +441,105 @@ class UI {
     el.classList.add('show');
     clearTimeout(this._toastTimer);
     this._toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
+  }
+
+  // --- Touch & pointer gestures ------------------------------------------
+  // Everything here is pointer-based so a mouse and a finger take the same
+  // path. Gestures: drag a Book sideways to reorder The Shelf; long-press
+  // any slug or Book for its details; swipe a rack slug downward (toward
+  // the tray) to stage it for reroll.
+
+  onShelfPointerDown(e, index, el) {
+    if (this.busy) return;
+    const start = { x: e.clientX, y: e.clientY };
+    let dragging = false;
+    el.setPointerCapture(e.pointerId);
+
+    const move = (ev) => {
+      if (!dragging && Math.abs(ev.clientX - start.x) + Math.abs(ev.clientY - start.y) > 8) {
+        dragging = true;
+        el.classList.add('touch-drag');
+        this.hideTip();
+      }
+      if (!dragging) return;
+      ev.preventDefault();
+      // Highlight whichever Book is under the pointer.
+      const over = this.bookElementAt(ev.clientX, ev.clientY);
+      for (const b of this.els['shelf'].querySelectorAll('.shelf-book')) {
+        b.classList.toggle('drag-over', b === over && b !== el);
+      }
+    };
+
+    const up = (ev) => {
+      el.releasePointerCapture(ev.pointerId);
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', up);
+      el.classList.remove('touch-drag');
+      if (!dragging) return; // a plain tap on a Book does nothing
+      const over = this.bookElementAt(ev.clientX, ev.clientY);
+      if (over && over !== el) {
+        const to = Number(over.dataset.bookIdx);
+        if (this.game.books.reorder(index, to)) {
+          Sfx.click();
+          this.render(); // order changed: shelf AND the live preview
+          return;
+        }
+      }
+      this.renderShelf(); // clear any drag-over highlight
+    };
+
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+  }
+
+  // The Book under a screen point (pointer capture hides the real target).
+  bookElementAt(x, y) {
+    const hit = document.elementFromPoint(x, y);
+    return hit ? hit.closest('.shelf-book') : null;
+  }
+
+  // Long-press anywhere useful shows the tooltip; on a rack slug, a downward
+  // swipe sends it to the reroll tray (the touch stand-in for right-click).
+  onTilePointerDown(e, tile, el, zone) {
+    if (this.busy) return;
+    const start = { x: e.clientX, y: e.clientY };
+    const wrap = el.parentElement;
+    let acted = false; // a gesture fired, so suppress the click that follows
+
+    const holdTimer = setTimeout(() => {
+      acted = true;
+      this.showTip(el, this.tileTip(tile));
+      Sfx.click();
+    }, 420);
+
+    const move = (ev) => {
+      const dx = ev.clientX - start.x;
+      const dy = ev.clientY - start.y;
+      if (Math.abs(dx) + Math.abs(dy) > 10) clearTimeout(holdTimer);
+      // Downward flick on a rack slug = stage it for reroll.
+      if (zone === 'rack' && !acted && dy > 34 && Math.abs(dy) > Math.abs(dx)) {
+        acted = true;
+        clearTimeout(holdTimer);
+        wrap.classList.remove('touch-hold');
+        this.onSendToTray(tile);
+      }
+    };
+
+    const up = () => {
+      clearTimeout(holdTimer);
+      wrap.classList.remove('touch-hold');
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', up);
+      if (acted) this.suppressClick = true; // the gesture already handled it
+    };
+
+    if (zone === 'rack') wrap.classList.add('touch-hold');
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
   }
 
   // --- Input -----------------------------------------------------------

@@ -31,15 +31,20 @@ body {
   color: var(--paper);
   font-family: var(--font-mono);
   height: 100vh;
+  height: 100dvh; /* dodges mobile browser chrome */
   overflow: hidden;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;  /* no iOS callout on long-press */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;   /* kill the 300ms double-tap zoom delay */
 }
 
 .hidden { display: none !important; }
 
 /* ---- Layout ---------------------------------------------------------- */
 
-#app { display: flex; height: 100vh; }
+#app { display: flex; height: 100vh; height: 100dvh; }
 
 #sidebar {
   width: 250px;
@@ -449,6 +454,8 @@ body {
    the hover lift, and the one-time elastic settle — so none of them fight
    the idle float animation on the .tile itself. */
 .tile-wrap { position: relative; line-height: 0; transition: transform 0.15s ease; }
+/* Slugs and Books own their gestures — the page must not steal them as scroll. */
+#rack .tile, #shelf .shelf-book { touch-action: none; }
 /* Dilate a touch on hover, in every zone (the tooltip fills in the details). */
 #rack .tile-wrap:hover { transform: translateY(-5px) scale(1.07); z-index: 6; }
 #stick .tile-wrap:hover, #tray .tile-wrap:hover { transform: scale(1.09); z-index: 6; }
@@ -1290,6 +1297,152 @@ body {
   z-index: 30;
 }
 #toast.show { opacity: 1; }
+
+/* ---- Mobile / narrow screens --------------------------------------------
+   The desktop layout is a fixed 250px sidebar beside the table. Below this
+   breakpoint the sidebar becomes a horizontal status strip above the table,
+   slugs shrink, and every overlay card goes full-bleed. Touch gestures are
+   wired up in ui.js (long-press = info, swipe down = reroll tray). */
+
+@media (max-width: 860px) {
+  body { overflow: auto; }
+
+  #app {
+    flex-direction: column;
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  /* Sidebar becomes a compact, horizontally scrolling status rail. */
+  #sidebar {
+    width: 100%;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 7px;
+    padding: 8px 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: none;
+    border-bottom: 1px solid var(--brass-dark);
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    background: var(--ink-2);
+    -webkit-overflow-scrolling: touch;
+  }
+  #sidebar::-webkit-scrollbar { height: 4px; }
+  #sidebar::-webkit-scrollbar-thumb { background: var(--brass-dark); border-radius: 2px; }
+
+  #masthead { font-size: 19px; letter-spacing: 2px; align-self: center; flex-shrink: 0; }
+  #tagline { display: none; }
+
+  .panel {
+    flex-shrink: 0;
+    padding: 5px 9px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .panel-row { gap: 12px; flex-direction: row; }
+  .panel-big { font-size: 18px; }
+  .panel-label { font-size: 8px; letter-spacing: 1px; }
+  .panel-sub { font-size: 9px; }
+  #target-bar { width: 70px; margin-top: 4px; }
+  #boss-row { gap: 5px; }
+  #boss-seal svg { width: 26px; height: 26px; }
+  .boss-name { font-size: 12px; }
+  #boss-panel { max-width: 190px; }
+  #boss-desc { font-size: 8.5px; line-height: 1.3; }
+  #level-row { gap: 5px; }
+  #stat-difficulty svg { width: 18px; height: 18px; }
+
+  /* Buttons and pool counts ride along at the end of the rail. */
+  #sidebar-foot {
+    margin-top: 0;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  #pool-counts { flex-direction: column; gap: 0; font-size: 8.5px; }
+  .btn-tiny { padding: 5px 7px; font-size: 8px; }
+  .shelf-list { font-size: 9.5px; line-height: 1.6; max-width: 150px; }
+
+  /* The table gets the rest of the screen. */
+  #table {
+    gap: 12px;
+    padding: 12px 8px 20px;
+    justify-content: flex-start;
+    /* Slugs sized off full width now that the sidebar is gone. */
+    --tile-w: min(46px, calc((100vw - 46px) / 12));
+  }
+
+  #shelf { gap: 5px; padding: 6px 7px; min-height: 78px; }
+  .shelf-slot { width: 52px; min-height: 72px; }
+  .shelf-book .book-icon svg:not(.sticker) { width: 32px; height: 40px; }
+  .shelf-book-name { font-size: 7px; max-width: 48px; }
+  .book-status { font-size: 7.5px; }
+  .tray-label { font-size: 8.5px; letter-spacing: 1px; text-align: center; }
+
+  #readout { min-height: 58px; }
+  #ro-word { font-size: clamp(20px, 7vw, 34px); letter-spacing: 3px; }
+  #ro-word.empty { font-size: 10px; letter-spacing: 1.5px; padding-top: 10px; }
+  #ro-math { font-size: 17px; }
+  #ro-eq b { font-size: 20px; }
+
+  #stick { gap: 3px; padding: 7px 8px; }
+  #rack { gap: 4px; min-height: 0; flex-wrap: wrap; justify-content: center; }
+  #tray { gap: 4px; padding: 5px 7px; }
+  #bench { gap: 10px 14px; }
+  #controls { gap: 7px; }
+  .btn { padding: 11px 16px; font-size: 12px; letter-spacing: 1px; }
+
+  #hint { font-size: 9px; line-height: 1.5; text-align: center; max-width: 340px; }
+
+  /* Overlays: full-bleed cards that scroll. */
+  #overlay, #shop, #library, #bagcheck, #picker, #deckpick, #penpick, #reset { padding: 10px; }
+  #overlay-card, #shop-card, #library-card, #bagcheck-card,
+  #picker-card, #deckpick-card, #penpick-card, #reset-card {
+    width: 100%;
+    max-height: 92dvh;
+    overflow-y: auto;
+    padding: 18px 16px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .shop-h h2 { font-size: 21px; letter-spacing: 1px; }
+  .shop-row { gap: 8px; justify-content: center; }
+  .shop-card, .pen-card { width: 100%; max-width: 260px; }
+  .lib-grid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+  .lib-card { padding: 9px 7px; }
+  .bc-grid { grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); }
+  .diff-row { gap: 6px; }
+  .diff-btn { padding: 6px 8px; }
+  .diff-btn svg { width: 26px; height: 26px; }
+  .tile.picker-tile { width: 52px; height: 61px; }
+  .tile.picker-tile .letter { font-size: 27px; }
+
+  /* Hover lifts are meaningless on touch; keep the settle animations. */
+  #rack .tile-wrap:hover, #stick .tile-wrap:hover, #tray .tile-wrap:hover { transform: none; }
+  .shelf-book:hover { animation: book-bob var(--float-dur, 3.4s) ease-in-out infinite; transform: none; }
+}
+
+/* Very narrow phones: drop to a tighter rack. */
+@media (max-width: 420px) {
+  #table { --tile-w: min(40px, calc((100vw - 34px) / 12)); }
+  #masthead { display: none; }
+  .shelf-slot { width: 46px; min-height: 66px; }
+  #shelf { min-height: 72px; }
+}
+
+/* Touch devices: the slug being dragged/held gets a clear lifted state. */
+.tile-wrap.touch-hold { transform: translateY(-6px) scale(1.08); z-index: 7; }
+.shelf-book.touch-drag {
+  opacity: 0.9;
+  animation: none;
+  transform: scale(1.16);
+  z-index: 9;
+  filter: brightness(1.25);
+}
 
 /* ---- Loading ----------------------------------------------------------- */
 
