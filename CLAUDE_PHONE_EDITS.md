@@ -74,6 +74,39 @@ All phone-session work lands on: `claude/file-review-jdleyy`
   the full sweep, no JS errors).
 - **[commit]:** 036b1df
 
+### 007 — 2026-07-19 — Word display: mini-letter particles
+- **File:** `js/ui.js` (`renderReadout` + `ensureWordParticles`/`emitWordParticles`/
+  `stopWordParticles`), `css/style.css` (`.wordfx`, `wordfx-drift`)
+- **What:** While a valid word is set, the readout sheds tiny drifting copies of
+  its own letters; the count scales with word length (more letters = more).
+- **Why:** Requested ambient word-display juice. Emitter stops on forge and when
+  the word goes invalid/empty; gated by `reduceMotion`.
+- **[commit]:** 8101444
+
+### 008 — 2026-07-19 — Word display: length colour scale
+- **File:** `js/ui.js` (`applyWordColor`, `clearWordFx`), `css/style.css`
+  (`#ro-word.valid` background-clip)
+- **What:** The composed word is coloured by length: mid-blue (≤3) → light-blue
+  (4–5) → light-blue→magenta gradient (6–8) → magenta→pink gradient (9–11).
+  Particles are tinted to match.
+- **Why:** Requested colour progression (replaces the flat verdigris "valid"
+  colour with a length scale). Gradient fills clip to the glyphs.
+- **[commit]:** 8101444
+
+### 009 — 2026-07-19 — Achievement system
+- **File:** `js/achievements.js` (new), `js/content.js` (`ACHIEVEMENTS`),
+  `js/config.js` (`ACHIEVEMENTS_KEY`), `js/game.js` (`progress()` + routed
+  events), `js/books.js` (sticker event), `index.html` (6 `#icon-ach-*` emblems,
+  `#achievements` container, script include), `js/ui.js`
+  (`drainAchievements`/`showAchievement`), `css/style.css` (`.ach-pop`)
+- **What:** A cosmetic progress layer parallel to Unlocks, persisted to its own
+  localStorage key. 14 achievements; earning one pops a corner card with icon,
+  title, and task description, which fades away. `Game.progress()` fans every
+  play event to both the unlock tracker and achievements.
+- **Why:** Requested achievement popups. Kept fully separate from game rules —
+  the rules never read achievement state.
+- **[commit]:** 8101444
+
 <!--
 ENTRY TEMPLATE (copy for each new edit):
 
