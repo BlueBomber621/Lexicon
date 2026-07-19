@@ -107,6 +107,39 @@ All phone-session work lands on: `claude/file-review-jdleyy`
   the rules never read achievement state.
 - **[commit]:** 8101444
 
+### 010 — 2026-07-19 — Shuffle button
+- **File:** `js/game.js` (`shuffleRack`), `index.html` (`#btn-shuffle`),
+  `js/ui.js` (`onShuffle`, control disable)
+- **What:** A SHUFFLE button in the controls reorders the rack for inspiration.
+- **Why:** Requested. Pure display reorder — no draw, no cost, pool untouched.
+- **[commit]:** 2291507
+
+### 011 — 2026-07-19 — Slug drag & drop
+- **File:** `js/game.js` (`_extract`, `placeInStick`, `moveTileToRack`),
+  `js/ui.js` (rewrote `onTilePointerDown`; added `_tapTile`, `_makeGhost`,
+  `_moveGhost`, `_dropInfoAt`, `_highlightDrop`, `_clearDropHighlight`,
+  `_dropTile`), `css/style.css` (`.tile-ghost`, `.drop-zone`, `.dragging-src`)
+- **What:** Slugs are now drag & drop — a ghost follows the pointer and drops
+  into the stick (compose/reorder at a slot), the tray (stage a rack slug), or
+  the rack. Plain taps stay the quick move; long-press still shows details.
+  Replaces the old swipe-down-to-tray gesture with drag-to-tray.
+- **Why:** Requested. One pointer path covers mouse and touch.
+- **[commit]:** 2291507
+
+### 012 — 2026-07-19 — Saveable runs (Continue Run)
+- **File:** `js/config.js` (`SAVE_KEY`), `js/game.js` (`serialize`, `resume`,
+  `saveRun`, `clearSave`, static `loadSave`, `reapplyBossHooks` + `applyBoss`
+  refactor), `js/ui.js` (autosave at every action site; `resumeRun`; Continue
+  banner in `renderDeckPick`; `onDeckPickClick` handler), `css/style.css`
+  (`.continue-row`)
+- **What:** The run autosaves to localStorage after each action (pool as flat
+  tile records + per-zone id lists; Books/consumables/boss by id, hooks
+  re-registered on resume). A "Continue Run" banner on the deck-pick screen
+  drops straight back in. Cleared on game over / file reset.
+- **Why:** Requested "continue run." Verified a level-5/42-ticket run survives a
+  full page reload.
+- **[commit]:** 2291507
+
 <!--
 ENTRY TEMPLATE (copy for each new edit):
 
