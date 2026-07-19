@@ -140,6 +140,19 @@ All phone-session work lands on: `claude/file-review-jdleyy`
   full page reload.
 - **[commit]:** 2291507
 
+### 013 — 2026-07-19 — Word colour: continuous & eased (no snapping)
+- **File:** `css/style.css` (`@property --word-c1/--word-c2/--word-glow`,
+  `#ro-word.valid` gradient + `transition`), `js/ui.js` (`applyWordColor`
+  rewritten; new `_rampColor`/`_rgb`; `clearWordFx` clears the vars)
+- **What:** Replaced the four discrete length buckets with a continuous RGB
+  ramp (anchors mid-blue@1 → light-blue@5 → magenta@8 → pink@11, lerped
+  between). The two gradient stops are typed `<color>` custom properties that
+  CSS transitions at 0.28s, so each added/removed letter **eases** to the next
+  colour instead of snapping. Left stop trails the right, so the gradient spread
+  grows smoothly with length.
+- **Why:** Requested — "gradually go to each step, not snap." Refines edit 008.
+- **[commit]:** af3097a
+
 <!--
 ENTRY TEMPLATE (copy for each new edit):
 
