@@ -23,4 +23,5 @@
   await Util.sleep(400);
   loadingEl.classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
+  ui.openDeckPick(); // pick a starting case (or keep the freshly dealt run)
 })();

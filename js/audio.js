@@ -54,6 +54,14 @@ const Sfx = {
 
   invalid() { this._play(() => this._note(110, 0.18, 'sawtooth', 0.05)); },
 
+  // A retrigger — bright doubled blip, like the press stamping twice.
+  copy() {
+    this._play(() => {
+      this._note(990, 0.07, 'square', 0.05);
+      this._note(990, 0.07, 'square', 0.05, 0.09);
+    });
+  },
+
   reroll() {
     this._play(() => {
       this._note(300, 0.07, 'square', 0.04);

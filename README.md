@@ -23,13 +23,16 @@ npx -y http-server -p 8123 -c-1 .
 - 3 plays and 3 rerolls per round. Right-click (or shift-click) tiles into
   the 3-slot reroll tray; a full tray fires automatically. Replacements are
   drawn first, then the tray's tiles are shuffled back into the bag.
-- Hit the level target before your plays run out. Targets scale forever.
-- Every 6th level is a boss with a rule modifier (vowels score 0, mult
-  capped, short words banned, …).
-- Tickets earned = length of your longest word that round. The Foundry
-  (shop) opens after every 2nd level: Books (persistent scoring modifiers,
-  5 shelf slots, three rarities), new tiles for the deck (plain / foil /
-  gilt editions), and single-use consumables.
+- Hit the level target before your plays run out. Targets run in 6-level
+  sections with growing increments (delta + delta-delta), stepping up after
+  each boss and rounding to clean figures (see `CFG.TARGET`).
+- Every 6th level is a random boss debuff: taxed letters, banned E, a
+  demanded tile, a shrunken hand, tiles destroyed on play, cursed slots, …
+- Round-win tickets are itemised: longest word length + 1 per unused play,
+  plus whatever your Books pay. The Foundry (shop) opens after every 2nd
+  level: Books (5 shelf slots, three rarities, some unlockable), themed
+  tile bags (pick 3 of 5–6 rolled candidates, each with variant/alteration
+  odds), and single-use consumables. Bag Check shows your deck composition.
 
 ## Architecture
 
@@ -60,9 +63,15 @@ Emits `js/data/lexicon.data.js` (gzip+base64).
 1. **Core engine** — ✅ rack, stick, validation, scoring, deck cycle, UI shell.
 2. **Progression & bosses** — ✅ boss every 6th level, endless scaling.
 3. **Shop & Books** — ✅ trigger/effect framework, buy/sell, slots, rarity.
-4. **Content & juice** — ✅ 28 Books (16 starting + 12 unlockable through play, with
-   per-Book SVG cover art and a Library collection screen), two-axis tiles
-   (5 variants × 5 alterations, stackable), themed shop bags with SVG art,
+4. **Content & juice** — ✅ 60 Books (scaling rares, shelf-position plays,
+   and not-quite-books like Quizlet and The Square Book), **The Shelf**
+   (drag-to-reorder — order IS the scoring order), **event-scripted count-up**
+   (every letter, Book, sticker, and COPY! retrigger pulses and pops its own
+   number, accelerating up to 6×), **Stickers** (6 tiers up to Lamination =
+   retrigger), **Pen Packs** (13 pens incl. the rare Double-Tip/Highlighter/
+   Rough for Fuzzy/Highlighted/Cardstock slugs), **5 difficulties** (paper
+   sizes Note→Imperial, ×1–×8), color SVG art throughout, a Library screen,
+   5 unlockable starting cases, two-axis tiles, skip-friendly bag picks,
    consumables, synth audio, run stats.
 
 ## Tiles: two axes

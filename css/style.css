@@ -140,14 +140,29 @@ body {
 .boss-name {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 17px;
+  font-size: 16px;
   color: var(--press-red);
 }
+#boss-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+#boss-seal { color: var(--press-red); flex-shrink: 0; }
+#boss-seal svg { width: 40px; height: 40px; display: block; }
 
 /* Books & consumables shelf */
 .shelf-list { font-size: 11px; line-height: 1.9; color: var(--paper); }
 .shelf-row { display: flex; align-items: center; gap: 6px; }
 .shelf-row .btn-tiny { margin-left: auto; }
+
+/* Scaling Books' live growth badge */
+.book-status {
+  margin-left: auto;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: var(--copper-hot);
+  border: 1px solid var(--brass-dark);
+  border-radius: 3px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
 .dot { font-size: 9px; }
 .r-common { color: var(--paper-dim); }
 .r-uncommon { color: var(--verdigris); }
@@ -168,6 +183,178 @@ body {
   color: var(--paper-dim);
 }
 #pool-counts b { color: var(--paper); }
+
+/* ---- The Shelf (Books in play, drag to reorder) ----------------------- */
+
+#shelf-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+#shelf {
+  display: flex;
+  gap: 10px;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, #2b2114 0%, var(--ink-2) 100%);
+  border: 2px solid var(--brass-dark);
+  border-radius: 6px;
+  min-height: 96px;
+  box-shadow: inset 0 -6px 10px rgba(0, 0, 0, 0.45);
+}
+
+.shelf-slot {
+  width: 62px;
+  min-height: 88px;
+  border-radius: 4px;
+  border: 1px dashed var(--brass-dark);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+@keyframes book-bob {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  28%  { transform: translate(0.6px, -1.6px) rotate(0.9deg); }
+  55%  { transform: translate(-0.7px, 0.6px) rotate(-0.7deg); }
+  80%  { transform: translate(0.3px, 1px) rotate(0.4deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+.shelf-book {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 2px;
+  cursor: grab;
+  animation: book-bob var(--float-dur, 3.4s) ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+}
+.shelf-book:active { cursor: grabbing; }
+/* Hover dilation: pause the bob so the static scale wins, and ease into it. */
+.shelf-book:hover {
+  animation: none;
+  transform: scale(1.14) translateY(-4px);
+  transition: transform 0.15s ease;
+  position: relative;
+  z-index: 6;
+}
+.shelf-book.dragging { opacity: 0.35; animation: none; }
+.shelf-slot:has(.drag-over), .shelf-book.drag-over { outline: 2px dashed var(--copper); outline-offset: 2px; border-radius: 4px; }
+.shelf-book .book-icon svg:not(.sticker) { width: 40px; height: 50px; }
+.shelf-book-name {
+  font-size: 8px;
+  letter-spacing: 0.3px;
+  color: var(--paper-dim);
+  text-align: center;
+  line-height: 1.15;
+  max-width: 58px;
+}
+.shelf-book .book-status { margin-left: 0; }
+
+/* Sticker badge on a Book cover's corner. Sized as a FIXED PROPORTION of the
+   cover (percentages resolve against the .book-icon box, whose width equals
+   the cover svg), so it scales with any Book asset — never oversized or tiny. */
+.book-icon { position: relative; display: inline-block; }
+.book-icon .sticker {
+  position: absolute;
+  top: -9%;
+  right: -11%;
+  width: 40%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+}
+
+.sticker-line {
+  font-size: 10px;
+  line-height: 1.4;
+  color: #7a5c0e;
+  font-weight: 700;
+}
+
+/* ---- Pen pack ---------------------------------------------------------- */
+
+#penpick {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 8, 5, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 12;
+  padding: 24px;
+}
+
+#penpick-card {
+  width: min(760px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 3px;
+  padding: 28px 34px;
+  box-shadow: 0 12px 44px rgba(0, 0, 0, 0.7);
+  border: 1px solid #c9bd9f;
+}
+
+.pen-icon svg { width: 44px; height: 44px; display: block; }
+
+.pen-card {
+  border: 2px solid #b3a88e;
+  background: var(--paper-2);
+  border-radius: 3px;
+  padding: 12px;
+  width: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.pen-card:hover { background: #efe6cd; }
+.pen-card.selected { border-color: var(--verdigris); background: rgba(79, 174, 150, 0.12); }
+.pen-card .desc { font-size: 10.5px; line-height: 1.5; }
+.pen-name { font-family: var(--font-display); font-weight: 700; font-size: 15px; }
+
+/* ---- Difficulty row (deck pick) + sidebar stamp ------------------------- */
+
+.diff-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.diff-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  border: 2px solid #b3a88e;
+  background: var(--paper-2);
+  border-radius: 3px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--ink);
+}
+.diff-btn svg { width: 34px; height: 34px; }
+.diff-btn:hover { background: #efe6cd; }
+.diff-btn.selected { border-color: var(--press-red); background: rgba(192, 74, 50, 0.1); }
+.diff-btn.locked { opacity: 0.45; cursor: not-allowed; background: #ddd3ba; }
+.diff-btn.locked:hover { background: #ddd3ba; }
+
+/* Undiscovered Books keep their secret in the Library. */
+.lib-name.lib-unknown {
+  font-size: 20px;
+  letter-spacing: 3px;
+  color: #8f8778;
+}
+
+#level-row { display: flex; align-items: center; gap: 8px; }
+#stat-difficulty { color: var(--paper-dim); }
+#stat-difficulty svg { width: 26px; height: 26px; display: block; }
 
 /* ---- Readout --------------------------------------------------------- */
 
@@ -258,7 +445,35 @@ body {
   transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.35s ease;
 }
 
-#rack .tile:hover { transform: translateY(-5px); }
+/* Placement wrapper: owns the hand-curve offset (margin-top, set inline),
+   the hover lift, and the one-time elastic settle — so none of them fight
+   the idle float animation on the .tile itself. */
+.tile-wrap { position: relative; line-height: 0; transition: transform 0.15s ease; }
+/* Dilate a touch on hover, in every zone (the tooltip fills in the details). */
+#rack .tile-wrap:hover { transform: translateY(-5px) scale(1.07); z-index: 6; }
+#stick .tile-wrap:hover, #tray .tile-wrap:hover { transform: scale(1.09); z-index: 6; }
+
+@keyframes settle {
+  0%   { transform: scale(0.55) translateY(-16px); opacity: 0; }
+  55%  { transform: scale(1.09) translateY(3px); opacity: 1; }
+  78%  { transform: scale(0.96) translateY(-1px); }
+  100% { transform: scale(1) translateY(0); }
+}
+.tile-wrap.settle { animation: settle 0.42s cubic-bezier(0.3, 1.2, 0.5, 1) both; }
+
+/* Idle float: tiny asymmetrical drift, phase seeded per tile (inline vars).
+   In play it's translate only — no tilt; the picker adds tilt separately. */
+@keyframes tile-float {
+  0%   { transform: translate(0, 0); }
+  23%  { transform: translate(0.7px, -1.4px); }
+  49%  { transform: translate(-0.8px, 0.5px); }
+  76%  { transform: translate(0.4px, 1.1px); }
+  100% { transform: translate(0, 0); }
+}
+#rack .tile, #stick .tile, #tray .tile {
+  animation: tile-float var(--float-dur, 3s) ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+}
 
 .tile .letter {
   font-family: var(--font-display);
@@ -276,7 +491,8 @@ body {
   color: var(--paper-dim);
 }
 
-/* Slug in a slot sits flush */
+/* Slug in a slot sits flush (wrapper and tile both fill the slot) */
+.slot .tile-wrap { width: 100%; height: 100%; }
 .slot .tile { width: 100%; height: 100%; }
 
 /* Editions */
@@ -300,6 +516,20 @@ body {
 }
 .tile.gilt .value { color: var(--gold); }
 
+/* The Foreman's demanded tile */
+.tile.must-play {
+  outline: 2px solid var(--press-red);
+  outline-offset: 2px;
+  box-shadow: 0 0 12px rgba(192, 74, 50, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+/* The Gatekeeper's cursed stick slots */
+.slot.cursed {
+  border-color: var(--press-red);
+  background: #241014;
+  box-shadow: inset 0 0 10px rgba(192, 74, 50, 0.45);
+}
+
 /* The scoring sweep: each slug flares copper in sequence */
 .tile.flare { animation: copper-flare 0.4s ease; }
 .tile.scored {
@@ -314,8 +544,8 @@ body {
   100% { transform: none; }
 }
 
-/* Spent slugs drop off to the hellbox */
-.tile.spent { opacity: 0; transform: translateY(26px) rotate(4deg); }
+/* Spent slugs drop off to the hellbox (float paused so the drop shows) */
+.tile.spent { animation: none; opacity: 0; transform: translateY(26px) rotate(4deg); }
 
 /* ---- Tile VARIANTS (material) — set the slug's body ------------------- */
 /* Paper: pale stock, dark ink, dog-eared corner marking its one use. */
@@ -344,6 +574,13 @@ body {
 /* Deckle: torn, untrimmed edge. */
 .tile.v-deckle { border-style: dashed; border-color: #c9bd9f; border-radius: 4px 9px 5px 8px; }
 
+/* Cardstock: warm orange stock that clips a ticket every score. */
+.tile.v-cardstock {
+  background: linear-gradient(160deg, #b06a2f 0%, #7d4a1c 75%);
+  border-color: #542f0f;
+}
+.tile.v-cardstock .value { color: #f0d0a0; }
+
 /* ---- Tile ALTERATIONS (styling) — override the letter ----------------- */
 /* Ordered AFTER variants so alteration colour wins on a dual-axis tile. */
 .tile.a-red .letter { color: var(--press-red); text-shadow: 0 0 9px rgba(192, 74, 50, 0.55); }
@@ -351,6 +588,23 @@ body {
 .tile.a-bold .letter { -webkit-text-stroke: 1.4px currentColor; }
 .tile.a-italic .letter { font-style: italic; transform: skewX(-9deg); }
 .tile.a-underline .letter { text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 2px; }
+
+/* Highlighted: a marker band behind the letter; ×1.5 mult on trigger. */
+.tile.a-highlight .letter {
+  background: linear-gradient(100deg, rgba(232, 213, 50, 0.05) 0%, rgba(232, 213, 50, 0.55) 12%, rgba(232, 213, 50, 0.55) 88%, rgba(232, 213, 50, 0.05) 100%);
+  padding: 0 3px;
+  border-radius: 2px;
+}
+
+/* Fuzzy: the letter prints twice, almost overlapping — a retrigger. */
+.tile.a-fuzzy .letter { position: relative; opacity: 0.68; }
+.tile.a-fuzzy .letter::after {
+  content: attr(data-l);
+  position: absolute;
+  left: 4px;
+  top: 0;
+  opacity: 0.55;
+}
 
 /* ---- Bench: reroll tray + controls -------------------------------------- */
 
@@ -465,6 +719,17 @@ body {
 
 #ov-body { font-size: 13px; line-height: 2; margin-bottom: 22px; }
 #ov-body b { font-size: 15px; }
+
+/* Itemised ticket payout on the win card */
+.pay-list { margin: 10px auto 12px; max-width: 300px; }
+.pay-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  line-height: 1.9;
+  border-bottom: 1px dotted #b3a88e;
+}
+.pay-row b { font-size: 13px; color: var(--press-red); }
 #ov-body .big-tickets {
   font-family: var(--font-display);
   font-size: 26px;
@@ -555,11 +820,20 @@ body {
 .bag-icon.r-uncommon { color: #2f7d68; }
 .bag-icon.r-rare { color: var(--copper); }
 
+/* Sundries: torn paper slips, pinned to the board at a slight angle. */
+.shop-card-slip { align-items: center; text-align: center; }
+.slip-icon { display: inline-block; line-height: 0; color: var(--brass-dark); }
+.slip-icon svg { width: 46px; height: 46px; display: block; transform: rotate(-3deg); }
+.slip-icon.slip-icon-sm svg { width: 15px; height: 15px; display: inline-block; vertical-align: -3px; }
+#sidebar .slip-icon { color: var(--paper-dim); }
+.shop-card-slip.slip-rare { border-color: var(--copper); box-shadow: 0 0 10px rgba(193, 126, 62, 0.3); }
+.shop-card-slip.slip-rare .slip-icon { color: var(--copper); }
+
 /* Book covers: rarity-tinted vector art (sprite in index.html). */
 .book-icon { display: inline-block; line-height: 0; }
-.book-icon svg { width: 44px; height: 55px; display: block; }
-.book-icon.book-icon-sm svg { width: 15px; height: 19px; display: inline-block; vertical-align: -4px; }
-.book-icon.book-icon-lg svg { width: 56px; height: 70px; }
+.book-icon svg:not(.sticker) { width: 44px; height: 55px; display: block; }
+.book-icon.book-icon-sm svg:not(.sticker) { width: 15px; height: 19px; display: inline-block; vertical-align: -4px; }
+.book-icon.book-icon-lg svg:not(.sticker) { width: 56px; height: 70px; }
 .book-icon.r-common { color: #6b6250; }
 .book-icon.r-uncommon { color: #2f7d68; }
 .book-icon.r-rare { color: var(--copper); }
@@ -683,6 +957,307 @@ body {
   line-height: 1.45;
   color: var(--press-red);
   border-top: 1px dotted #b3a88e;
+  padding-top: 5px;
+}
+
+/* ---- Bag selection (the picker) ------------------------------------------- */
+
+#picker {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 8, 5, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 12; /* above the shop */
+  padding: 24px;
+}
+
+#picker-card {
+  width: min(620px, 100%);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 3px;
+  padding: 28px 34px;
+  box-shadow: 0 12px 44px rgba(0, 0, 0, 0.7);
+  border: 1px solid #c9bd9f;
+}
+
+.picker-bag-icon { width: 30px; height: 30px; vertical-align: -6px; color: var(--brass-dark); }
+
+.picker-hint { font-size: 12px; color: #6b6250; margin: 10px 0 18px; }
+
+.picker-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+  padding: 10px 0 18px;
+}
+
+.pick-slot {
+  padding: 8px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.pick-slot:hover { background: rgba(0, 0, 0, 0.05); }
+.pick-slot.selected {
+  border-color: var(--verdigris);
+  background: rgba(79, 174, 150, 0.12);
+}
+
+/* Bigger slugs with a playful drift + tiny tilt, phase-seeded per tile. */
+@keyframes tile-float-tilt {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  22%  { transform: translate(1.4px, -2.4px) rotate(1.4deg); }
+  48%  { transform: translate(-1.6px, 1px) rotate(-1.1deg); }
+  74%  { transform: translate(0.9px, 2px) rotate(0.8deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+.tile.picker-tile {
+  width: 62px;
+  height: 73px;
+  cursor: pointer;
+  animation: tile-float-tilt var(--float-dur, 3s) ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+}
+.tile.picker-tile .letter { font-size: 32px; }
+
+.picker-count { font-size: 12px; letter-spacing: 1px; color: #6b6250; align-self: center; }
+
+/* ---- Bag check ------------------------------------------------------------- */
+
+#bagcheck {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 8, 5, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 11;
+  padding: 24px;
+}
+
+#bagcheck-card {
+  width: min(680px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 3px;
+  padding: 28px 34px;
+  box-shadow: 0 12px 44px rgba(0, 0, 0, 0.7);
+  border: 1px solid #c9bd9f;
+}
+
+.bc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  gap: 6px;
+}
+
+.bc-cell {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid #b3a88e;
+  background: var(--paper-2);
+  border-radius: 3px;
+  padding: 6px 4px;
+}
+.bc-cell.bc-none { opacity: 0.3; }
+.bc-letter { font-family: var(--font-display); font-weight: 900; font-size: 16px; }
+.bc-count { font-size: 11px; color: #6b6250; }
+
+.bc-specials { font-size: 11px; line-height: 2.1; }
+.bc-special {
+  border: 1px solid #b3a88e;
+  border-radius: 3px;
+  background: var(--paper-2);
+  padding: 2px 7px;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+/* ---- Starting-case selection ----------------------------------------------- */
+
+#deckpick {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 8, 5, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 13; /* above everything — it starts the run */
+  padding: 24px;
+}
+
+#deckpick-card {
+  width: min(880px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 3px;
+  padding: 28px 34px;
+  box-shadow: 0 12px 44px rgba(0, 0, 0, 0.7);
+  border: 1px solid #c9bd9f;
+}
+
+.deck-card { min-height: 170px; }
+.deck-icon { color: var(--brass-dark); }
+.deck-icon svg { width: 56px; height: 56px; display: block; }
+.deck-icon.deck-locked { filter: grayscale(1) brightness(0.6); }
+.deck-card .btn-buy { margin-top: 4px; }
+
+/* ---- Count-up events: pulses + floating numbers --------------------------- */
+
+/* The trigger dilation: swell a touch, flash brighter, ease back fast. */
+@keyframes trigger-pulse {
+  0%   { transform: scale(1); filter: brightness(1); }
+  35%  { transform: scale(1.16); filter: brightness(1.65); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+.trigger-pulse { animation: trigger-pulse 0.3s cubic-bezier(0.3, 1.3, 0.5, 1) !important; }
+
+/* A retrigger flashes yellow instead. */
+@keyframes copy-pulse {
+  0%   { transform: scale(1); filter: brightness(1); }
+  35%  { transform: scale(1.2); filter: brightness(1.9) sepia(0.6) saturate(3) hue-rotate(10deg); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+.copy-pulse { animation: copy-pulse 0.35s cubic-bezier(0.3, 1.3, 0.5, 1) !important; }
+
+/* Floating count numbers rising out of whatever triggered. */
+@keyframes score-pop {
+  0%   { transform: translate(-50%, 0) scale(0.6); opacity: 0; }
+  20%  { transform: translate(-50%, -8px) scale(1.15); opacity: 1; }
+  100% { transform: translate(-50%, -30px) scale(1); opacity: 0; }
+}
+.score-pop {
+  position: fixed;
+  z-index: 40;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  animation: score-pop 0.75s ease-out forwards;
+}
+.pop-pts { color: var(--copper-hot); }
+.pop-mult { color: var(--press-red); }
+.pop-sticker { color: var(--gold); }
+.pop-ticket { color: var(--gold); }
+.pop-copy { color: #e8d532; font-size: 17px; }
+
+/* ---- Reset file ------------------------------------------------------------ */
+
+.btn-danger { border-color: var(--press-red); color: var(--press-red); }
+.btn-danger:hover:not(:disabled) { background: rgba(192, 74, 50, 0.18); }
+
+.btn-danger-solid {
+  background: var(--press-red);
+  border-color: var(--press-red);
+  color: var(--paper-2);
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 7px 14px;
+}
+.btn-danger-solid:hover:not(:disabled) { background: #d9573c; }
+
+#reset {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 8, 5, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 14; /* above everything, including the deck pick */
+  padding: 24px;
+}
+
+#reset-card {
+  width: min(460px, 100%);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 3px;
+  padding: 26px 30px;
+  box-shadow: 0 12px 44px rgba(0, 0, 0, 0.75);
+  border: 2px solid var(--press-red);
+}
+
+.shop-section-title.red { color: var(--press-red); }
+
+.reset-lead { font-size: 12px; line-height: 1.65; margin: 8px 0 12px; }
+.reset-final { font-size: 15px; text-align: center; line-height: 1.7; }
+
+.reset-stats {
+  font-size: 11px;
+  line-height: 1.9;
+  background: var(--paper-2);
+  border: 1px solid #b3a88e;
+  border-radius: 3px;
+  padding: 9px 12px;
+  margin-bottom: 12px;
+}
+
+/* The substituted reading, under the composed word */
+.ro-reading {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--paper-dim);
+  margin-top: 3px;
+}
+
+/* ---- Hover tooltip (slugs & Books) ---------------------------------------- */
+
+#hovertip {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  width: max-content;
+  max-width: 240px;
+  background: var(--ink-2);
+  border: 1px solid var(--brass);
+  border-radius: 5px;
+  padding: 9px 12px;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.6);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--paper);
+}
+
+#hovertip .tip-name {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 16px;
+  letter-spacing: 1px;
+  line-height: 1.15;
+}
+#hovertip .tip-sub {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: var(--paper-dim);
+  margin-bottom: 5px;
+}
+#hovertip .tip-sub.r-common { color: var(--paper-dim); }
+#hovertip .tip-sub.r-uncommon { color: var(--verdigris); }
+#hovertip .tip-sub.r-rare { color: var(--copper-hot); }
+#hovertip .tip-line { margin-top: 4px; }
+#hovertip .tip-line b { color: var(--copper-hot); }
+#hovertip .tip-status b { color: var(--copper-hot); }
+#hovertip .tip-warn { color: var(--press-red); }
+#hovertip .tip-flavor {
+  margin-top: 6px;
+  font-style: italic;
+  color: var(--paper-dim);
+  border-top: 1px solid var(--brass-dark);
   padding-top: 5px;
 }
 

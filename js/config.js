@@ -32,21 +32,55 @@ const CFG = {
   // scored inside the ScoringEngine choke point. The effect data lives in
   // content.js (VARIANTS / ALTERATIONS); this file only holds tuning numbers.
 
-  // Odds a Sorts Tray tile rolls each axis (independent).
-  SORTS_VARIANT_CHANCE: 0.6,
-  SORTS_ALTER_CHANCE: 0.6,
+  // (Per-bag variant/alteration odds live on each bag entry in content.js.)
 
   // Seed the starting deck with a spread of every variant & alteration so
   // they're visible immediately. Turn OFF for a real run.
-  TEST_TILES: true,
+  TEST_TILES: false,
   TEST_COPIES: 3,          // copies of each variant / alteration when testing
 
   // --- Progression ----------------------------------------------------
-  TARGET_BASE: 150,        // level 1 score target
-  TARGET_GROWTH: 1.4,      // target = base × growth^(level-1), forever
-  TICKETS_PER_LETTER: 1,   // tickets = longest word length that round × this
-  BOSS_EVERY: 6,           // every 6th level is a boss with a rule modifier
-  SHOP_EVERY: 2,           // the shop opens after every 2nd level cleared
+  // Targets run in 6-level sections ending on a boss. Within a section the
+  // increment starts at DELTA and grows by DD each round. After each boss the
+  // next section starts at bossTarget × BOSS_MULT, CEILed to a magnitude that
+  // climbs every two sections (100, 100, 1000, 1000, 10k, ...), and DELTA/DD
+  // grow by DELTA_GROWTH/DD_GROWTH. As a FINAL step each round's requirement
+  // is rounded to the NEAREST magnitude one power below the section's
+  // (10 for sections 1-2, 100 for 3-4, ...). Full math in Game.target.
+  TARGET: {
+    START: 100,        // level 1 goal
+    DELTA: 60,         // first increment of section 1
+    DELTA_GROWTH: 40,  // delta increases per section
+    DD: 10,            // delta-delta of section 1
+    DD_GROWTH: 15,     // delta-delta increases per section
+    BOSS_MULT: 1.2,    // next section's start = last boss target × this
+  },
+  TICKETS_PER_LETTER: 1,    // tickets = longest word length that round × this
+  TICKETS_PER_PLAY_LEFT: 1, // + this for each unused play at round end
+  BOSS_EVERY: 6,            // every 6th level is a boss with a rule modifier
+  SHOP_EVERY: 2,            // the shop opens after every 2nd level cleared
+
+  // Difficulties, named for paper sizes. `mult` scales the target curve's
+  // DELTA / DD (and their growths); START and the rounding rules are shared.
+  // Imperial draws from BOSSES_IMPERIAL when that pool has entries.
+  DIFFICULTIES: [
+    { id: 'note', name: 'Note', mult: 1, icon: 'icon-diff-note' },
+    { id: 'letter', name: 'Letter', mult: 1.5, icon: 'icon-diff-letter' },
+    { id: 'demy', name: 'Demy', mult: 2.5, icon: 'icon-diff-demy' },
+    { id: 'royal', name: 'Royal', mult: 4, icon: 'icon-diff-royal' },
+    { id: 'imperial', name: 'Imperial', mult: 8, icon: 'icon-diff-imperial' },
+  ],
+
+  // Sticker odds: chance a shop Book carries one, then rarity weights
+  // (quickly escalating rarity; Lamination is the rarest).
+  STICKER_CHANCE: 0.28,
+  STICKER_WEIGHTS: { present: 20, discount: 12, signature: 6, donated: 4, bestseller: 2, lamination: 1 },
+
+  TYPEWRITER_DEPTH: 150, // candidates The Typewriter scores for real
+
+  PEN_PACK_COST: 5,   // the Foundry's pen pack
+  PEN_TILE_PULLS: 10, // tiles pulled from the bag to choose from
+  PEN_CHOICES: 3,     // pens offered per pack
 
   // --- Shop -------------------------------------------------------------
   BOOK_SLOTS: 5,           // max Books on the shelf
@@ -54,6 +88,7 @@ const CFG = {
   SHOP_BOOK_OFFERS: 3,
   SHOP_BAG_OFFERS: 3,      // themed tile bags offered
   SHOP_CONSUMABLE_OFFERS: 2,
+  BAG_PICKS: 3,            // tiles you keep from a bag's rolled options
   RARITY_WEIGHTS: { common: 6, uncommon: 3, rare: 1 }, // shop draw odds
   PROFILE_KEY: 'lexicon-profile', // localStorage key for lifetime unlock progress
   SELL_FACTOR: 0.5,        // Books sell for cost × this (floored, min 1)
@@ -72,7 +107,9 @@ const CFG = {
 
   // --- Animation timing (ms) — the scoring sweep -----------------------
   ANIM: {
-    LETTER_STEP: 190,   // per-slug copper flare as points climb
+    EVENT_STEP: 330,    // base beat per count event (tile pts, book mult, ...)
+    SPEED_RAMP: 0.06,   // sweep speed grows by this per event...
+    SPEED_CAP: 6,       // ...capped at this multiple
     MULT_HOLD: 550,     // pause on the press-red mult flash
     TOTAL_COUNT: 450,   // total counting up to points × mult
     TOTAL_HOLD: 650,    // pause on the final total

@@ -21,6 +21,13 @@ const Util = {
     return n.toLocaleString('en-US');
   },
 
+  // Random key from an object map (variant/alteration rolls). Pass
+  // excludeRare to skip pen-only styles (Fuzzy, Cardstock, ...).
+  randomKey(map, excludeRare = false) {
+    const keys = Object.keys(map).filter((k) => !excludeRare || !map[k].rare);
+    return keys[Math.floor(Math.random() * keys.length)];
+  },
+
   // Animates an element's text from one number to another over `ms`,
   // then resolves. Used for the total count-up in the scoring sweep.
   // setTimeout rather than requestAnimationFrame: rAF stops entirely in a
