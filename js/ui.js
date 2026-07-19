@@ -415,32 +415,53 @@ class UI {
     }
   }
 
-  // Colour the composed word by its length and return the particle colour.
-  // Scale: mid-blue (<=3) -> light-blue (4-5) -> light-blue→magenta gradient
-  // (6-8) -> magenta→pink gradient (9-11). Gradients clip to the glyphs.
+  // Colour the composed word by its length on a SMOOTH ramp (mid-blue →
+  // light-blue → magenta → pink). Both gradient stops are continuous functions
+  // of length, set as typed custom properties that CSS transitions — so each
+  // added/removed letter eases the colour to the next step instead of snapping.
+  // The left stop trails the right by a few letters, so the gradient spread
+  // grows with the word (near-solid when short). Returns the hot-end colour for
+  // the particles.
   applyWordColor(len) {
     const el = this.els['ro-word'];
-    const MIDBLUE = '#3f7fd0', LIGHTBLUE = '#7cc4ff', MAGENTA = '#d24be0', PINK = '#ff8fce';
-    let fill, glow, particle;
-    if (len <= 3) { fill = MIDBLUE; glow = MIDBLUE; particle = MIDBLUE; }
-    else if (len <= 5) { fill = LIGHTBLUE; glow = LIGHTBLUE; particle = LIGHTBLUE; }
-    else if (len <= 8) { fill = `linear-gradient(95deg, ${LIGHTBLUE}, ${MAGENTA})`; glow = MAGENTA; particle = MAGENTA; }
-    else { fill = `linear-gradient(95deg, ${MAGENTA}, ${PINK})`; glow = PINK; particle = PINK; }
-
-    if (fill.startsWith('linear')) {
-      el.style.backgroundImage = fill;
-      el.style.color = 'transparent';
-    } else {
-      el.style.backgroundImage = 'none';
-      el.style.color = fill;
-    }
-    el.style.textShadow = `0 0 20px ${glow}73`; // 0x73 ≈ 45% alpha
-    return particle;
+    const c1 = this._rampColor(len - 3); // left stop trails a few letters back
+    const c2 = this._rampColor(len);     // right stop = the word's own length
+    el.style.setProperty('--word-c1', this._rgb(c1));
+    el.style.setProperty('--word-c2', this._rgb(c2));
+    el.style.setProperty('--word-glow', this._rgb(c2, 0.5));
+    return this._rgb(c2);
   }
 
-  // Undo applyWordColor's inline styling and stop the particle emitter.
+  // A colour on the length ramp (clamped 1..11), lerped in RGB between anchors.
+  _rampColor(len) {
+    const stops = [
+      { at: 1, c: [63, 127, 208] },   // mid blue
+      { at: 5, c: [124, 196, 255] },  // light blue
+      { at: 8, c: [210, 75, 224] },   // magenta
+      { at: 11, c: [255, 143, 206] }, // pink
+    ];
+    const L = Math.max(1, Math.min(11, len));
+    for (let i = 0; i < stops.length - 1; i++) {
+      const a = stops[i], b = stops[i + 1];
+      if (L <= b.at) {
+        const t = (L - a.at) / (b.at - a.at);
+        return a.c.map((v, k) => Math.round(v + (b.c[k] - v) * t));
+      }
+    }
+    return stops[stops.length - 1].c;
+  }
+
+  _rgb(c, a) {
+    return a == null ? `rgb(${c[0]}, ${c[1]}, ${c[2]})`
+      : `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${a})`;
+  }
+
+  // Clear the word's colour variables and stop the particle emitter.
   clearWordFx() {
     const el = this.els['ro-word'];
+    el.style.removeProperty('--word-c1');
+    el.style.removeProperty('--word-c2');
+    el.style.removeProperty('--word-glow');
     el.style.backgroundImage = '';
     el.style.color = '';
     el.style.textShadow = '';

@@ -1598,10 +1598,23 @@ body {
   will-change: transform, opacity;
 }
 
-/* The composed-word colour scale is applied inline by JS (UI.applyWordColor):
-   mid-blue (short) -> light-blue (4-5) -> light-blue→magenta gradient (6-8)
-   -> magenta→pink gradient (9-11). Gradient fills clip to the glyphs. */
-#ro-word.valid { background-clip: text; -webkit-background-clip: text; }
+/* The composed-word colour is a SMOOTH ramp by length: mid-blue → light-blue
+   → magenta → pink. Both gradient stops are continuous functions of the length
+   (UI.applyWordColor sets them as typed custom properties), and they're typed
+   as <color> so CSS can TRANSITION them — adding/removing a letter eases the
+   colour to the next step instead of snapping. The left stop trails the right
+   by a few letters, so the gradient spread grows with the word. */
+@property --word-c1 { syntax: '<color>'; inherits: false; initial-value: #3f7fd0; }
+@property --word-c2 { syntax: '<color>'; inherits: false; initial-value: #3f7fd0; }
+@property --word-glow { syntax: '<color>'; inherits: false; initial-value: rgba(63, 127, 208, 0.5); }
+#ro-word.valid {
+  background-image: linear-gradient(95deg, var(--word-c1), var(--word-c2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 20px var(--word-glow);
+  transition: --word-c1 0.28s ease, --word-c2 0.28s ease, --word-glow 0.28s ease;
+}
 
 /* ---- Achievement pop-ups (corner) --------------------------------------- */
 #achievements {
@@ -1664,6 +1677,7 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .wordfx { display: none !important; }
   .ach-pop { animation: ach-life 4.6s linear forwards; } /* keep the fade, drop the slide feel is minor — still gentle */
+  #ro-word.valid { transition: none !important; } /* colour still ramps, just no eased tween */
 }
 
 /* ---- Slug drag & drop --------------------------------------------------- */
