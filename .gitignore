@@ -1,0 +1,11 @@
+# Local Claude Code settings (keep launch.json shared, ignore personal prefs)
+.claude/settings.local.json
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+
+# Node (only used transiently via npx for the dev server)
+node_modules/
+npm-debug.log*
