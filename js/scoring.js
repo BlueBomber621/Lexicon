@@ -58,12 +58,17 @@ class ScoringEngine {
 
   // Score a composed word. Pure with respect to game state unless commit
   // is true (then ticket-granting effects may fire; game must be passed).
-  score(tiles, { commit = false, game = null } = {}) {
+  // `word` is the RESOLVED spelling (wildcards and multi-letter sorts already
+  // worked out) and `spells[i]` is what slug i spelled. Mult follows the
+  // resolved word's length, so multi-letter sorts genuinely lengthen a word.
+  score(tiles, { commit = false, game = null, word = null, spells = null } = {}) {
+    const resolved = word || tiles.map((t) => t.letter).join('');
     const ctx = {
       tiles,
-      word: tiles.map((t) => t.letter).join(''),
+      word: resolved,
+      spells: spells || tiles.map((t) => t.letter),
       points: 0,
-      mult: CFG.MULT_BASE + tiles.length, // the length-driven mult
+      mult: CFG.MULT_BASE + resolved.length, // the length-driven mult
       events: [],
       commit,
       game,
@@ -85,8 +90,11 @@ class ScoringEngine {
     tiles.forEach((tile, index) => {
       const step = this.letterPass(ctx, tile, index, bonus);
       const a = ALTERATIONS[tile.alteration];
-      // Fuzzy prints twice — unless the letter was muted (Great Vowel Shift).
-      if (a && a.retrigger && !step.mute) {
+      // Fuzzy prints twice — as does anything a Book has marked for
+      // retriggering (The Colouring Book's red letters). Muted slugs sit out.
+      const bookRetrigger = ctx.retriggerAlterations
+        && ctx.retriggerAlterations.includes(tile.alteration);
+      if ((a && a.retrigger || bookRetrigger) && !step.mute) {
         ctx.events.push({ type: 'copy', target: 'tile', i: index,
           runP: ctx.points, runM: ctx.mult });
         this.letterPass(ctx, tile, index, bonus);
@@ -111,7 +119,10 @@ class ScoringEngine {
   // One full scoring pass for a single letter (steps a-d above).
   // Returns the step so the caller can see whether it was muted.
   letterPass(ctx, tile, index, bonus) {
-    const step = { tile, index, pts: tile.value + bonus[index], mute: false };
+    // step.spells is what this slug actually spelled (a wildcard's resolved
+    // letter, a sort's expansion) — letter-trigger Books test against it.
+    const step = { tile, index, pts: tile.value + bonus[index], mute: false,
+      spells: ctx.spells[index] || tile.letter };
     const m0 = ctx.mult;
 
     // Setup hooks may mute the letter outright (The Great Vowel Shift):

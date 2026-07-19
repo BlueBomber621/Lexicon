@@ -45,7 +45,7 @@ class BookManager {
     if (this.isFull && !donated) return false;
     this.shelf.push(def);
     this.state[def.id] = def.initState ? { ...def.initState } : {};
-    if (stickerId) this.stickers[def.id] = stickerId;
+    if (stickerId) this.applySticker(def.id, stickerId);
     this.syncHooks();
     return true;
   }
@@ -96,8 +96,15 @@ class BookManager {
     if (bare.length === 0) return null;
     const book = bare[Math.floor(Math.random() * bare.length)];
     const id = this.randomStickerId(['discount']);
-    this.stickers[book.id] = id;
+    this.applySticker(book.id, id);
     return { book, sticker: STICKERS[id] };
+  }
+
+  // Every route a sticker can reach The Shelf by, so the lifetime record
+  // (The Rulebook's unlock) sees all of them.
+  applySticker(bookId, stickerId) {
+    this.stickers[bookId] = stickerId;
+    this.game.newUnlocks.push(...this.game.unlocks.notify('sticker', { stickerId }));
   }
 
   // Every letter substitution the shelf allows, merged into one map of
@@ -154,6 +161,18 @@ class BookManager {
         this.unregisters.push(this.game.scoring.register(
           'onPreWord', (ctx) => book.preScore(ctx, this.game), 0, { source: 'book' }));
       }
+      // The Prequel wears whatever its right-hand neighbour does, so it
+      // listens on both scoring channels and defers at fire time.
+      if (book.copiesNeighbor) {
+        this.unregisters.push(this.game.scoring.register('onLetterScored', (ctx, step) => {
+          const n = this.neighbourOf(book);
+          if (n && n.trigger === 'letter') this.fireBook(n, ctx, step);
+        }, 0, { source: 'book' }));
+        this.unregisters.push(this.game.scoring.register('onWordForged', (ctx) => {
+          const n = this.neighbourOf(book);
+          if (n && n.trigger === 'word') this.fireBook(n, ctx, null);
+        }, 0, { source: 'book' }));
+      }
       if (book.trigger === 'preWord') {
         this.unregisters.push(this.game.scoring.register(
           'onPreWord', (ctx) => this.fireBook(book, ctx, null), 0, { source: 'book' }));
@@ -181,11 +200,25 @@ class BookManager {
     }
   }
 
-  // A sticker's scoring rider: its own count on the Book's turn.
+  // The Book immediately to the right on The Shelf (The Prequel's target).
+  neighbourOf(book) {
+    return this.shelf[this.shelf.indexOf(book) + 1] || null;
+  }
+
+  // A sticker's scoring rider: its own count on the Book's turn. The
+  // Rulebook makes every sticker fire twice.
   fireSticker(book, ctx) {
+    const times = ctx.stickersTwice ? 2 : 1;
+    for (let k = 0; k < times; k++) this.fireStickerOnce(book, ctx, k > 0);
+  }
+
+  fireStickerOnce(book, ctx, isCopy) {
     const sticker = this.stickerOf(book);
     if (!sticker || !sticker.effect) return;
     const b = this.shelf.indexOf(book);
+    if (isCopy) {
+      ctx.events.push({ type: 'copy', target: 'book', b, runP: ctx.points, runM: ctx.mult });
+    }
     const e = sticker.effect;
     if (e.points) {
       ctx.points += e.points;
@@ -228,9 +261,12 @@ class BookManager {
   // Round-start moment: roundStart-trigger Books fire their effect, and any
   // scoring Book with a `roundStart` rider (e.g. Incunabula's -1 play) pays it.
   onRoundStart() {
-    for (const book of this.shelf) {
+    // Snapshot: an action may remove Books mid-loop (The Obituary eats one).
+    for (const book of this.shelf.slice()) {
+      if (!this.owns(book.id)) continue; // already devoured this round
       this.applyEconomy(book.trigger === 'roundStart' ? book.effect : book.roundStart,
         this.state[book.id], book);
+      if (book.onRoundStartAction) book.onRoundStartAction(this.game, this.state[book.id], book);
     }
   }
 

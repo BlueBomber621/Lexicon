@@ -574,6 +574,15 @@ body {
 /* Deckle: torn, untrimmed edge. */
 .tile.v-deckle { border-style: dashed; border-color: #c9bd9f; border-radius: 4px 9px 5px 8px; }
 
+/* Peculiar sorts: brass-tinged slugs whose faces aren't plain letters. */
+.tile.t-special {
+  border-color: var(--brass);
+  box-shadow: inset 0 0 0 1px rgba(138, 109, 59, 0.55),
+              inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 3px 6px rgba(0, 0, 0, 0.55);
+}
+.tile.t-special .letter { font-size: calc(var(--tile-w, 56px) * 0.46); }
+#hovertip .tip-special { color: var(--copper-hot); }
+
 /* Cardstock: warm orange stock that clips a ticket every score. */
 .tile.v-cardstock {
   background: linear-gradient(160deg, #b06a2f 0%, #7d4a1c 75%);

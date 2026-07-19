@@ -29,7 +29,7 @@ const BOOKS = [
   { id: 'vowel-press', name: 'Vowel Press', rarity: 'common', cost: 3, trigger: 'letter',
     desc: 'Vowels score +2 extra points.',
     flavor: 'A, E, I, O, U — the load-bearing walls of the language.',
-    when: (ctx, step) => 'AEIOU'.includes(step.tile.letter),
+    when: (ctx, step) => Util.spellsAny(step, 'AEIOU'),
     effect: { points: 2 } },
 
   { id: 'bold-face', name: 'Bold Face', rarity: 'common', cost: 3, trigger: 'letter',
@@ -153,7 +153,7 @@ const BOOKS = [
   { id: 'etaoin', name: 'Etaoin Shrdlu', rarity: 'uncommon', cost: 5, trigger: 'letter',
     desc: 'E, T, A, O, I and N score +2 extra points.',
     flavor: 'The first column of the Linotype, summoned by accident.',
-    when: (ctx, step) => 'ETAOIN'.includes(step.tile.letter),
+    when: (ctx, step) => Util.spellsAny(step, 'ETAOIN'),
     effect: { points: 2 } },
 
   { id: 'monotype', name: 'Monotype', rarity: 'uncommon', cost: 5, trigger: 'word',
@@ -258,7 +258,10 @@ const BOOKS = [
   // trigger 'passive' — no scoring effect at all. `substitute` maps a tile
   // letter to the letters it MAY ALSO BE READ AS when checking the word
   // against the dictionary. Scoring always uses the real tile letters.
-  { id: 'the-lisp', name: 'The Lisp', rarity: 'common', cost: 4, trigger: 'passive',
+  // Rare, not common: with Z at 10 points, reading Z-as-S turns a pile of
+  // cheap Zs into 40-point plays. The Turned Sort stays common because N and
+  // U are both worth 1, so it has no equivalent scoring exploit.
+  { id: 'the-lisp', name: 'The Lisp', rarity: 'rare', cost: 7, trigger: 'passive',
     desc: 'For spelling, any S may be read as a Z — and any Z as an S.',
     flavor: 'The compositor has a slight impediment. The dictionary is being very polite about it.',
     substitute: { S: ['Z'], Z: ['S'] } },
@@ -381,11 +384,90 @@ const BOOKS = [
       if (res) game.note(`${res.sticker.name} stuck to ${res.book.name}`);
     } } },
 
+  // ===== Slug-aware & shelf-aware Books =================================
+  { id: 'yellow-books', name: 'The Yellow Books', rarity: 'uncommon', cost: 6, trigger: 'word',
+    desc: '+2 mult for every slug in the word worth less than 5 points.',
+    flavor: 'Everyone is listed. Nobody is important.',
+    effect: { mult: (ctx) => 2 * ctx.tiles.filter((t) => t.value < 5).length } },
+
+  { id: 'tally-stone', name: 'The Tally Stone', rarity: 'uncommon', cost: 6, trigger: 'word',
+    desc: '+5 points for every Cornerstone slug in the word — placed correctly or not.',
+    flavor: 'Scratch a mark for each one. The stone does not care where they stood.',
+    when: (ctx) => ctx.tiles.some((t) => t.variant === 'cornerstone'),
+    effect: { points: (ctx) => 5 * ctx.tiles.filter((t) => t.variant === 'cornerstone').length } },
+
+  { id: 'colouring-book', name: 'The Colouring Book', rarity: 'rare', cost: 8, trigger: 'passive',
+    desc: 'Every Red Letter slug retriggers.',
+    flavor: 'Stay inside the lines. Then go over them again.',
+    preScore: (ctx) => { ctx.retriggerAlterations = [...(ctx.retriggerAlterations || []), 'red']; } },
+
+  { id: 'times-tables', name: 'Times Tables', rarity: 'rare', cost: 8, trigger: 'word',
+    desc: '×2 mult on any word containing a T.',
+    flavor: 'T times two. It refuses to elaborate.',
+    when: (ctx) => ctx.word.includes('T'),
+    effect: { xMult: 2 },
+    unlock: { desc: 'Score a word at ×50 mult or higher.', event: 'forge',
+      test: (data) => data.mult >= 50 } },
+
+  { id: 'cookbook', name: 'The Cookbook', rarity: 'uncommon', cost: 6, trigger: 'word',
+    desc: '+2 points for every slug worth more than the slug before it.',
+    flavor: 'Build the flavours up. Never let a course disappoint the last.',
+    effect: { points: (ctx) => {
+      let steps = 0;
+      for (let i = 1; i < ctx.tiles.length; i++) {
+        if (ctx.tiles[i].value > ctx.tiles[i - 1].value) steps++;
+      }
+      return 2 * steps;
+    } },
+    unlock: { desc: 'Beat the 3rd boss of a single run.', event: 'roundWin',
+      test: (data) => data.bossesThisRun >= 3 } },
+
+  { id: 'grid-notebook', name: 'The Grid Notebook', rarity: 'rare', cost: 8, trigger: 'letter',
+    desc: 'Doubles the points of the slug in the same position as this Book sits on The Shelf.',
+    flavor: 'Everything in its square. Especially you.',
+    when: (ctx, step, game, state, pos) => step.index === pos,
+    effect: { points: (ctx, step) => step.pts },
+    unlock: { desc: 'Beat the 1st boss on Letter difficulty or above.', event: 'roundWin',
+      test: (data, profile, game) => data.bossesThisRun >= 1 && game.difficulty >= 1 } },
+
+  { id: 'rulebook', name: 'The Rulebook', rarity: 'rare', cost: 9, trigger: 'passive',
+    desc: 'Every sticker on The Shelf triggers twice.',
+    flavor: 'It wrote the rules. It is allowed to read them twice.',
+    preScore: (ctx) => { ctx.stickersTwice = true; },
+    unlock: { desc: 'Own every kind of sticker at least once.', event: 'sticker',
+      test: (data, profile) =>
+        Object.keys(CFG.STICKER_WEIGHTS).every((id) => profile.stickersSeen.includes(id)) } },
+
+  { id: 'prequel', name: 'The Prequel', rarity: 'rare', cost: 9, trigger: 'passive',
+    desc: "Copies the ability of the Book immediately to its right.",
+    flavor: 'It came first, but only after the sequel did well.',
+    copiesNeighbor: true,
+    unlock: { desc: 'Beat the 4th boss of a run on Letter difficulty or above.', event: 'roundWin',
+      test: (data, profile, game) => data.bossesThisRun >= 4 && game.difficulty >= 1 } },
+
+  { id: 'obituary', name: 'The Obituary', rarity: 'rare', cost: 9, trigger: 'word',
+    desc: 'Starts at ×1 mult. Every level it destroys another Book at random — and grows +1× when it does.',
+    flavor: 'It only ever prints in the past tense.',
+    initState: { x: 1 },
+    status: (state) => `×${state.x}`,
+    // Devours a shelfmate at the start of each level.
+    onRoundStartAction: (game, state, self) => {
+      const prey = game.books.shelf.filter((b) => b.id !== self.id);
+      if (prey.length === 0) return;
+      const victim = prey[Math.floor(Math.random() * prey.length)];
+      game.books.remove(victim.id);
+      state.x += 1;
+      game.note(`The Obituary runs ${victim.name} — now ×${state.x}`);
+    },
+    effect: { xMult: (ctx, step, game, state) => state.x },
+    unlock: { desc: 'Beat the 6th boss of a single run.', event: 'roundWin',
+      test: (data) => data.bossesThisRun >= 6 } },
+
   // ===== Not-quite-books (the silly additions; custom cover bases) ======
   { id: 'bitten-book', name: 'The Bitten Book', rarity: 'common', cost: 3, trigger: 'letter',
     desc: 'A, B and C score +3 extra points.',
     flavor: 'Someone took a bite out of the alphabet. Started at the beginning, naturally.',
-    when: (ctx, step) => 'ABC'.includes(step.tile.letter),
+    when: (ctx, step) => Util.spellsAny(step, 'ABC'),
     effect: { points: 3 } },
 
   { id: 'bookmark', name: 'The Bookmark', rarity: 'common', cost: 3, trigger: 'word',
@@ -444,7 +526,7 @@ const BOOKS = [
   { id: 'ghostwriter', name: 'Ghostwriter', rarity: 'uncommon', cost: 5, trigger: 'letter',
     desc: 'Consonants score +1 extra point.',
     flavor: 'Nobody saw who set the type.',
-    when: (ctx, step) => !'AEIOU'.includes(step.tile.letter),
+    when: (ctx, step) => !Util.spellsAny(step, 'AEIOU'),
     effect: { points: 1 },
     unlock: { desc: 'Forge a vowelless word of 3+ letters.', event: 'forge',
       test: (data) => data.word.length >= 3 && ![...data.word].some((c) => 'AEIOU'.includes(c)) } },
@@ -801,6 +883,31 @@ const CONSUMABLES = [
     } },
 ];
 
+// --- SPECIAL SLUGS (the sorts that aren't plain letters) ------------------
+// A slug's `spells` is what it contributes to the SPELLING; the glyph on its
+// face is the key. Multi-letter sorts spell several letters but still trigger
+// ONCE, scoring their combined value. `wild: true` spells any single letter.
+// Longer spellings mean a longer word, which means more mult.
+
+const SPECIAL_SLUGS = {
+  'Œ': { spells: 'CE', value: 4, name: 'Ethel', tip: 'A C and an E, cast as one sort.' },
+  'Æ': { spells: 'AE', value: 2, name: 'Ash', tip: 'An A and an E, cast as one sort.' },
+  '&': { spells: 'AND', value: 4, name: 'Ampersand', tip: 'Spells AND — three letters from one slug.' },
+  'ß': { spells: 'SS', value: 2, name: 'Eszett', tip: 'The double-S, cast as one sort.' },
+  '!': { spells: 'I', value: 10, name: 'Bang', tip: 'An I anywhere — and a heavy one.' },
+  '@': { spells: 'A', value: 5, name: 'At', tip: 'An A, worth rather more than an A.' },
+  '№': { spells: 'NO', value: 2, name: 'Numero', tip: 'Spells NO.' },
+  '_': { spells: null, wild: true, value: 0, name: 'Quad', tip: 'Blank metal: any letter at all, worth nothing.' },
+};
+
+const ALL_LETTERS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
+
+// What a slug contributes to the spelling (its glyph, or its expansion).
+function slugSpells(letter) {
+  const s = SPECIAL_SLUGS[letter];
+  return s ? s.spells : letter;
+}
+
 // --- Tile VARIANTS (the slug's material) ----------------------------------
 // One of these per tile (or none). Effects are placement-based — they care
 // about WHERE the tile sits in the word, not raw value. Applied inside the
@@ -930,4 +1037,10 @@ const BAGS = [
     rarity: 'rare', pool: 'EAIORNSTLDUCMPBG',
     style: { variant: 0.65, alteration: 0.65 },
     desc: 'Pick 3 of 6 slugs cast with heavy variant & alteration odds.' },
+
+  // The peculiar sorts: ligatures, wildcards and punctuation that spell.
+  { id: 'peculiars', name: 'The Peculiar Case', cost: 12, options: 3, picks: 2,
+    icon: 'icon-peculiars', rarity: 'rare', pool: Object.keys(SPECIAL_SLUGS).join(''),
+    style: { variant: 0.2, alteration: 0.2 },
+    desc: 'Pick 2 of 3 peculiar sorts — ligatures, blanks and marks that spell.' },
 ];

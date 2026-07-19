@@ -145,7 +145,8 @@ class UI {
     const el = document.createElement('div');
     const v = VARIANTS[tile.variant];
     const a = ALTERATIONS[tile.alteration];
-    el.className = 'tile' + (v ? ' ' + v.cls : '') + (a ? ' ' + a.cls : '');
+    el.className = 'tile' + (v ? ' ' + v.cls : '') + (a ? ' ' + a.cls : '')
+      + (SPECIAL_SLUGS[tile.letter] ? ' t-special' : '');
     el.dataset.tileId = tile.id; // also the hover-tooltip anchor
     el.style.setProperty('--float-dur', (2.6 + (tile.id % 7) * 0.3).toFixed(2) + 's');
     el.style.setProperty('--float-delay', (-((tile.id % 11) / 11) * 3).toFixed(2) + 's');
@@ -164,8 +165,10 @@ class UI {
   tileTip(tile) {
     const v = VARIANTS[tile.variant];
     const a = ALTERATIONS[tile.alteration];
+    const sp = SPECIAL_SLUGS[tile.letter];
     let html = `<div class="tip-name">${tile.letter}</div>`
-      + `<div class="tip-sub">Cast slug &middot; worth ${tile.value} point${tile.value === 1 ? '' : 's'}</div>`;
+      + `<div class="tip-sub">${sp ? sp.name : 'Cast slug'} &middot; worth ${tile.value} point${tile.value === 1 ? '' : 's'}</div>`;
+    if (sp) html += `<div class="tip-line tip-special">${sp.tip}</div>`;
     if (v) html += `<div class="tip-line"><b>${v.name}</b> — ${v.desc}</div>`;
     if (a) html += `<div class="tip-line"><b>${a.name}</b> — ${a.desc}</div>`;
     if (this.game.bossState && this.game.bossState.mustId === tile.id) {
@@ -802,7 +805,7 @@ class UI {
 
   renderPicker() {
     const { bag, candidates } = this.pendingBag;
-    const picks = CFG.BAG_PICKS;
+    const picks = bag.picks || CFG.BAG_PICKS;
     const tilesHtml = candidates.map((t, i) => {
       const el = this.tileEl(t);
       el.classList.add('picker-tile');
@@ -828,8 +831,9 @@ class UI {
     const slot = e.target.closest('[data-pick]');
     if (slot) {
       const i = Number(slot.dataset.pick);
+      const cap = this.pendingBag.bag.picks || CFG.BAG_PICKS;
       if (this.pickerChoice.has(i)) this.pickerChoice.delete(i);
-      else if (this.pickerChoice.size < CFG.BAG_PICKS) this.pickerChoice.add(i);
+      else if (this.pickerChoice.size < cap) this.pickerChoice.add(i);
       Sfx.click();
       this.renderPicker();
       return;

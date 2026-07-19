@@ -8,8 +8,8 @@ class Tile {
   // Both are scored inside the ScoringEngine choke point (see content.js).
   constructor(letter, { variant = null, alteration = null } = {}) {
     this.id = ++Tile.nextId;
-    this.letter = letter;
-    this.value = CFG.TILE_VALUES[letter];
+    this.letter = letter; // the glyph on its face — may be a special sort
+    this.value = SPECIAL_SLUGS[letter] ? SPECIAL_SLUGS[letter].value : CFG.TILE_VALUES[letter];
     this.variant = variant;       // null | key of VARIANTS
     this.alteration = alteration; // null | key of ALTERATIONS
   }

@@ -21,6 +21,12 @@ const Util = {
     return n.toLocaleString('en-US');
   },
 
+  // Does the slug at this step spell any letter from `set`? Multi-letter
+  // sorts and resolved wildcards count, so Œ registers as containing an E.
+  spellsAny(step, set) {
+    return [...(step.spells || step.tile.letter)].some((c) => set.includes(c));
+  },
+
   // Random key from an object map (variant/alteration rolls). Pass
   // excludeRare to skip pen-only styles (Fuzzy, Cardstock, ...).
   randomKey(map, excludeRare = false) {

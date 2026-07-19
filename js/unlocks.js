@@ -27,6 +27,7 @@ class Unlocks {
       runsPlayed: 0,     // runs in which at least one word was forged
       jesterPenUsed: 0,  // Jester's Pen inkings
       maxDiffBeaten: -1, // highest difficulty index whose boss you've beaten
+      stickersSeen: [],  // every sticker kind you've ever owned
     };
   }
 
@@ -88,6 +89,9 @@ class Unlocks {
     if (event === 'bagcast') p.styledCast += data.styled || 0;
     if (event === 'runEnd') p.runsPlayed++;
     if (event === 'pen' && data.penId === 'pen-comic') p.jesterPenUsed++;
+    if (event === 'sticker' && data.stickerId && !p.stickersSeen.includes(data.stickerId)) {
+      p.stickersSeen.push(data.stickerId);
+    }
     if (event === 'roundWin') {
       p.ticketsEarned += data.tickets || 0;
       if (data.wasBoss) {
