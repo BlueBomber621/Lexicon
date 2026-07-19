@@ -22,9 +22,9 @@ class UI {
       'shelf', 'shelf-count', 'cons-list',
       'penpick', 'penpick-card',
       'ro-word', 'ro-math', 'ro-points', 'ro-mult', 'ro-eq', 'ro-total',
-      'stick', 'rack', 'tray', 'btn-forge', 'btn-reroll', 'btn-clear',
+      'stick', 'rack', 'tray', 'btn-forge', 'btn-reroll', 'btn-shuffle', 'btn-clear',
       'overlay', 'ov-title', 'ov-body', 'ov-btn',
-      'shop', 'shop-card', 'toast', 'btn-mute',
+      'shop', 'shop-card', 'toast', 'achievements', 'btn-mute',
       'btn-library', 'library', 'library-card',
       'btn-bagcheck', 'bagcheck', 'bagcheck-card',
       'picker', 'picker-card',
@@ -41,6 +41,7 @@ class UI {
 
     this.els['btn-forge'].addEventListener('click', () => this.onForge());
     this.els['btn-reroll'].addEventListener('click', () => this.onReroll());
+    this.els['btn-shuffle'].addEventListener('click', () => this.onShuffle());
     this.els['btn-clear'].addEventListener('click', () => this.onClear());
     this.els['ov-btn'].addEventListener('click', () => this.onOverlayButton());
     this.els['btn-mute'].addEventListener('click', () => this.onMute());
@@ -92,6 +93,7 @@ class UI {
   // Drain the game's unlock queue into toasts + a fanfare. Plain notes
   // (a sticker landing, etc.) queue up the same way.
   announceUnlocks() {
+    this.drainAchievements();
     if (this.game.pendingNotes.length > 0) {
       this.toast(this.game.pendingNotes.splice(0).join('  ·  '));
     }
@@ -102,6 +104,32 @@ class UI {
     this.toast(fresh.map(label).join('  ·  '));
     this.els['btn-library'].textContent =
       `LIBRARY ${this.game.unlocks.unlockedCount}/${BOOKS.length}`;
+  }
+
+  // Pop up any achievements earned since the last drain (called from the
+  // announce path on every render, plus after shop actions that don't render).
+  drainAchievements() {
+    if (!this.game.newAchievements || this.game.newAchievements.length === 0) return;
+    const fresh = this.game.newAchievements.splice(0);
+    Sfx.unlock();
+    for (const a of fresh) this.showAchievement(a);
+  }
+
+  // One corner pop-up — icon, title, task — that fades and removes itself.
+  showAchievement(a) {
+    const layer = this.els['achievements'];
+    if (!layer) return;
+    const pop = document.createElement('div');
+    pop.className = 'ach-pop';
+    pop.innerHTML =
+      `<span class="ach-icon"><svg viewBox="0 0 48 48"><use href="#${a.icon}"/></svg></span>` +
+      `<div class="ach-text">` +
+        `<div class="ach-eyebrow">ACHIEVEMENT UNLOCKED</div>` +
+        `<div class="ach-title">${a.title}</div>` +
+        `<div class="ach-desc">${a.desc}</div>` +
+      `</div>`;
+    layer.appendChild(pop);
+    setTimeout(() => pop.remove(), 4700); // outlives the ach-life animation
   }
 
   // A Book's cover art, at any size, with an optional corner sticker
@@ -230,8 +258,8 @@ class UI {
   syncHint() {
     const touchy = window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 860;
     this.els['hint'].innerHTML = touchy
-      ? 'Tap slugs to compose &middot; swipe a slug down for the reroll tray &middot; hold for details &middot; drag Books to reorder'
-      : 'Click / type = compose &middot; right-click or shift-click = reroll tray (3 fires it) &middot; Space = reroll &middot; Enter = forge';
+      ? 'Tap or drag slugs to compose &middot; drag a slug onto the tray to reroll &middot; hold for details &middot; drag Books to reorder'
+      : 'Click / type = compose &middot; drag slugs to arrange &middot; right-click or shift-click = reroll tray &middot; Space = reroll &middot; Enter = forge';
   }
 
   // A gesture (long-press, swipe) already handled this touch — swallow the
@@ -358,6 +386,7 @@ class UI {
       wordEl.textContent = 'SET TYPE TO FORGE A WORD';
       wordEl.className = 'empty';
       mathEl.classList.add('hidden');
+      this.clearWordFx();
       return;
     }
 
@@ -375,6 +404,115 @@ class UI {
     } else {
       mathEl.classList.add('hidden');
     }
+
+    // Valid words get the length colour scale + drifting mini-letter particles;
+    // anything else resets both.
+    if (status === 'valid' && preview) {
+      const color = this.applyWordColor(preview.word.length);
+      this.ensureWordParticles(preview.word, color);
+    } else {
+      this.clearWordFx();
+    }
+  }
+
+  // Colour the composed word by its length on a SMOOTH ramp (mid-blue →
+  // light-blue → magenta → pink). Both gradient stops are continuous functions
+  // of length, set as typed custom properties that CSS transitions — so each
+  // added/removed letter eases the colour to the next step instead of snapping.
+  // The left stop trails the right by a few letters, so the gradient spread
+  // grows with the word (near-solid when short). Returns the hot-end colour for
+  // the particles.
+  applyWordColor(len) {
+    const el = this.els['ro-word'];
+    const c1 = this._rampColor(len - 3); // left stop trails a few letters back
+    const c2 = this._rampColor(len);     // right stop = the word's own length
+    el.style.setProperty('--word-c1', this._rgb(c1));
+    el.style.setProperty('--word-c2', this._rgb(c2));
+    el.style.setProperty('--word-glow', this._rgb(c2, 0.5));
+    return this._rgb(c2);
+  }
+
+  // A colour on the length ramp (clamped 1..11), lerped in RGB between anchors.
+  _rampColor(len) {
+    const stops = [
+      { at: 1, c: [63, 127, 208] },   // mid blue
+      { at: 5, c: [124, 196, 255] },  // light blue
+      { at: 8, c: [210, 75, 224] },   // magenta
+      { at: 11, c: [255, 143, 206] }, // pink
+    ];
+    const L = Math.max(1, Math.min(11, len));
+    for (let i = 0; i < stops.length - 1; i++) {
+      const a = stops[i], b = stops[i + 1];
+      if (L <= b.at) {
+        const t = (L - a.at) / (b.at - a.at);
+        return a.c.map((v, k) => Math.round(v + (b.c[k] - v) * t));
+      }
+    }
+    return stops[stops.length - 1].c;
+  }
+
+  _rgb(c, a) {
+    return a == null ? `rgb(${c[0]}, ${c[1]}, ${c[2]})`
+      : `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${a})`;
+  }
+
+  // Clear the word's colour variables and stop the particle emitter.
+  clearWordFx() {
+    const el = this.els['ro-word'];
+    el.style.removeProperty('--word-c1');
+    el.style.removeProperty('--word-c2');
+    el.style.removeProperty('--word-glow');
+    el.style.backgroundImage = '';
+    el.style.color = '';
+    el.style.textShadow = '';
+    this.stopWordParticles();
+  }
+
+  // Keep the mini-letter emitter running for the current word (starting it if
+  // needed); it spawns more particles for longer words.
+  ensureWordParticles(word, color) {
+    if (this.reduceMotion) return;
+    if (!this._wp) this._wp = {};
+    this._wp.word = word;
+    this._wp.color = color;
+    if (this._wp.timer) return;
+    this._wp.timer = setInterval(() => this.emitWordParticles(), 165);
+    this.emitWordParticles(); // one right away so it feels responsive
+  }
+
+  stopWordParticles() {
+    if (this._wp && this._wp.timer) {
+      clearInterval(this._wp.timer);
+      this._wp.timer = null;
+    }
+  }
+
+  // Shed a few tiny copies of the word's own letters from the readout — count
+  // scales with word length ("more letters to emit").
+  emitWordParticles() {
+    const wp = this._wp;
+    const el = this.els['ro-word'];
+    if (!wp || !wp.word || !el) return;
+    const r = el.getBoundingClientRect();
+    if (r.width < 2) return; // laid out yet?
+    const len = wp.word.length;
+    const n = Math.max(1, Math.min(6, Math.round(len / 2)));
+    const frag = document.createDocumentFragment();
+    for (let k = 0; k < n; k++) {
+      const p = document.createElement('span');
+      p.className = 'wordfx';
+      p.textContent = wp.word[Math.floor(Math.random() * len)];
+      p.style.left = `${r.left + Math.random() * r.width}px`;
+      p.style.top = `${r.top + r.height * 0.5}px`;
+      p.style.color = wp.color;
+      p.style.setProperty('--dx', `${(Math.random() * 90 - 45).toFixed(0)}px`);
+      p.style.setProperty('--dy', `${(-24 - Math.random() * 54).toFixed(0)}px`);
+      p.style.setProperty('--rot', `${(Math.random() * 44 - 22).toFixed(0)}deg`);
+      p.style.fontSize = `${(10 + Math.random() * 9).toFixed(0)}px`;
+      frag.appendChild(p);
+      setTimeout(() => p.remove(), 1500);
+    }
+    document.body.appendChild(frag);
   }
 
   renderControls() {
@@ -382,6 +520,7 @@ class UI {
     this.els['btn-forge'].disabled = this.busy || g.stickStatus() !== 'valid';
     this.els['btn-reroll'].textContent = `REROLL (${g.rerolls})`;
     this.els['btn-reroll'].disabled = this.busy || g.rerolls === 0 || g.tray.length === 0;
+    this.els['btn-shuffle'].disabled = this.busy || g.rack.length === 0;
     this.els['btn-clear'].disabled = this.busy || g.stick.length === 0;
   }
 
@@ -506,46 +645,152 @@ class UI {
     return hit ? hit.closest('.shelf-book') : null;
   }
 
-  // Long-press anywhere useful shows the tooltip; on a rack slug, a downward
-  // swipe sends it to the reroll tray (the touch stand-in for right-click).
+  // Slugs are drag & drop. A press that stays put and holds shows the tooltip;
+  // a press that moves picks the slug up (a ghost follows the pointer) and, on
+  // release, drops it into whatever zone is under the pointer — the stick (at
+  // that slot, to compose or reorder), the tray (to stage a rack slug for
+  // reroll), or back to the rack. A press that neither holds nor drags is a
+  // plain tap: the quick shortcut move for its zone. One pointer path covers
+  // mouse and touch alike.
   onTilePointerDown(e, tile, el, zone) {
     if (this.busy) return;
+    if (e.button != null && e.button > 0) return; // right/middle: contextmenu handles the tray
     const start = { x: e.clientX, y: e.clientY };
-    const wrap = el.parentElement;
-    let acted = false; // a gesture fired, so suppress the click that follows
+    let dragging = false, acted = false, ghost = null;
+    try { el.setPointerCapture(e.pointerId); } catch (e2) { /* capture unsupported */ }
 
     const holdTimer = setTimeout(() => {
+      if (dragging) return;
       acted = true;
       this.showTip(el, this.tileTip(tile));
       Sfx.click();
     }, 420);
 
     const move = (ev) => {
-      const dx = ev.clientX - start.x;
-      const dy = ev.clientY - start.y;
-      if (Math.abs(dx) + Math.abs(dy) > 10) clearTimeout(holdTimer);
-      // Downward flick on a rack slug = stage it for reroll.
-      if (zone === 'rack' && !acted && dy > 34 && Math.abs(dy) > Math.abs(dx)) {
+      const dx = ev.clientX - start.x, dy = ev.clientY - start.y;
+      if (!dragging && Math.abs(dx) + Math.abs(dy) > 7) {
+        dragging = true;
         acted = true;
         clearTimeout(holdTimer);
-        wrap.classList.remove('touch-hold');
-        this.onSendToTray(tile);
+        this.hideTip();
+        ghost = this._makeGhost(el, ev);
+        el.classList.add('dragging-src');
       }
+      if (!dragging) return;
+      ev.preventDefault();
+      this._moveGhost(ghost, ev);
+      this._highlightDrop(ev.clientX, ev.clientY);
     };
 
-    const up = () => {
+    const up = (ev) => {
       clearTimeout(holdTimer);
-      wrap.classList.remove('touch-hold');
+      try { el.releasePointerCapture(ev.pointerId); } catch (e2) { /* already gone */ }
       el.removeEventListener('pointermove', move);
       el.removeEventListener('pointerup', up);
       el.removeEventListener('pointercancel', up);
-      if (acted) this.suppressClick = true; // the gesture already handled it
+      el.classList.remove('dragging-src');
+      this._clearDropHighlight();
+      if (ghost) { ghost.remove(); ghost = null; }
+      if (ev.type === 'pointercancel') return; // aborted — leave everything put
+      if (dragging) this._dropTile(tile, zone, ev.clientX, ev.clientY);
+      else if (!acted) this._tapTile(tile, zone, ev); // a plain tap: quick move
+      this.suppressClick = true; // we handled it via pointer events; swallow the click
     };
 
-    if (zone === 'rack') wrap.classList.add('touch-hold');
     el.addEventListener('pointermove', move);
     el.addEventListener('pointerup', up);
     el.addEventListener('pointercancel', up);
+  }
+
+  // The quick shortcut a plain tap performs, per zone.
+  _tapTile(tile, zone, ev) {
+    if (zone === 'rack') {
+      if (ev && ev.shiftKey) return this.onSendToTray(tile); // shift-tap stages for reroll
+      if (this.game.moveToStick(tile.id)) { Sfx.click(); this.saveRun(); }
+    } else if (zone === 'stick') {
+      this.game.returnToRack(tile.id); Sfx.click(); this.saveRun();
+    } else if (zone === 'tray') {
+      this.game.trayToRack(tile.id); Sfx.click(); this.saveRun();
+    }
+    this.render();
+  }
+
+  // --- Drag & drop plumbing (body-level ghost + drop hit-testing) ---------
+  _makeGhost(el, ev) {
+    const r = el.getBoundingClientRect();
+    const g = el.cloneNode(true);
+    g.classList.add('tile-ghost');
+    g.style.width = `${r.width}px`;
+    g.style.height = `${r.height}px`;
+    g.style.left = `${ev.clientX}px`;
+    g.style.top = `${ev.clientY}px`;
+    document.body.appendChild(g);
+    return g;
+  }
+
+  _moveGhost(g, ev) {
+    if (!g) return;
+    g.style.left = `${ev.clientX}px`;
+    g.style.top = `${ev.clientY}px`;
+  }
+
+  // The zone (and stick/rack insertion index) under a screen point.
+  _dropInfoAt(x, y) {
+    const hit = document.elementFromPoint(x, y);
+    if (!hit) return null;
+    if (hit.closest('#stick')) {
+      const slot = hit.closest('.slot');
+      const idx = slot ? [...this.els['stick'].children].indexOf(slot) : this.game.stick.length;
+      return { zone: 'stick', index: idx < 0 ? this.game.stick.length : idx };
+    }
+    if (hit.closest('#tray')) return { zone: 'tray' };
+    if (hit.closest('#rack')) {
+      const wrap = hit.closest('.tile-wrap');
+      const idx = wrap ? [...this.els['rack'].children].indexOf(wrap) : this.game.rack.length;
+      return { zone: 'rack', index: idx < 0 ? this.game.rack.length : idx };
+    }
+    return null;
+  }
+
+  _highlightDrop(x, y) {
+    this._clearDropHighlight();
+    const info = this._dropInfoAt(x, y);
+    if (info && this.els[info.zone]) this.els[info.zone].classList.add('drop-zone');
+  }
+
+  _clearDropHighlight() {
+    for (const z of ['stick', 'tray', 'rack']) this.els[z].classList.remove('drop-zone');
+  }
+
+  // Resolve a drop: compose/reorder on the stick, stage on the tray, or rack.
+  _dropTile(tile, fromZone, x, y) {
+    const info = this._dropInfoAt(x, y);
+    if (!info) { this.render(); return; } // dropped nowhere useful — snaps back
+    if (info.zone === 'tray') {
+      if (fromZone === 'rack') return this.onSendToTray(tile); // charges + auto-fire + render
+      this.game.moveTileToRack(tile.id); // a stick/tray slug can't stage; send it home
+    } else if (info.zone === 'stick') {
+      this.game.placeInStick(tile.id, info.index);
+    } else if (info.zone === 'rack') {
+      this.game.moveTileToRack(tile.id, info.index);
+    }
+    Sfx.click();
+    this.saveRun();
+    this.render();
+  }
+
+  // Shuffle the rack order for a fresh look at the hand.
+  onShuffle() {
+    if (this.busy || this.game.rack.length === 0) return;
+    this.game.shuffleRack();
+    Sfx.reroll();
+    this.saveRun();
+    this.render();
+  }
+
+  // Autosave the run (thin funnel so every action site reads the same).
+  saveRun() {
+    this.game.saveRun();
   }
 
   // --- Input -----------------------------------------------------------
@@ -580,6 +825,7 @@ class UI {
     }
     if (!this.game.moveToTray(tile.id)) return;
     Sfx.click();
+    this.saveRun();
     this.render();
     if (this.game.tray.length === CFG.TRAY_SLOTS) {
       this.busy = true;
@@ -595,6 +841,7 @@ class UI {
     if (this.game.tray.length === 0) return this.toast('Right-click tiles into the tray first');
     if (this.game.fireReroll()) {
       Sfx.reroll();
+      this.saveRun();
       this.render();
     }
   }
@@ -602,6 +849,7 @@ class UI {
   onClear() {
     if (this.busy) return;
     this.game.clearStick();
+    this.saveRun();
     this.render();
   }
 
@@ -624,6 +872,7 @@ class UI {
       Sfx.invalid();
       this.toast(this.slipRefusal(item));
     }
+    this.saveRun();
     this.render();
   }
 
@@ -681,11 +930,11 @@ class UI {
       this.onReroll();
     } else if (e.key === 'Backspace') {
       const last = this.game.stick[this.game.stick.length - 1];
-      if (last) { this.game.returnToRack(last.id); Sfx.click(); this.render(); }
+      if (last) { this.game.returnToRack(last.id); Sfx.click(); this.saveRun(); this.render(); }
     } else if (/^[a-zA-Z]$/.test(e.key)) {
       // Type to compose: first rack tile with that letter goes to the stick.
       const tile = this.game.rack.find((t) => t.letter === e.key.toUpperCase());
-      if (tile) { this.game.moveToStick(tile.id); Sfx.click(); this.render(); }
+      if (tile) { this.game.moveToStick(tile.id); Sfx.click(); this.saveRun(); this.render(); }
     }
   }
 
@@ -694,6 +943,7 @@ class UI {
   async onForge() {
     if (this.busy || this.game.stickStatus() !== 'valid') return;
     this.busy = true;
+    this.stopWordParticles(); // the word's about to be spent; stop shedding letters
     this.renderControls();
 
     const { result, outcome } = this.game.forge();
@@ -701,6 +951,7 @@ class UI {
 
     this.busy = false;
     this.render();
+    this.saveRun(); // snapshot post-forge (or clear the save if the run just ended)
 
     if (outcome === 'won') { Sfx.win(); this.showOverlay('won'); }
     else if (outcome === 'lost') { Sfx.lose(); this.showOverlay('lost'); }
@@ -941,6 +1192,7 @@ class UI {
       }
       this.game.nextLevel();
       this.render();
+      this.game.saveRun();
     } else {
       this.openDeckPick(); // NEW RUN goes through the case selection
     }
@@ -1084,6 +1336,7 @@ class UI {
       this.toast(kept.length ? this.describeBag(kept) : 'The sack goes back on the shelf, unspent.');
       this.renderShop();
       this.renderStats();
+      this.game.saveRun();
     }
   }
 
@@ -1148,6 +1401,7 @@ class UI {
       this.toast(`${chosenPen.name} inked ${chosenTile.letter}`);
       this.renderShop();
       this.renderStats();
+      this.game.saveRun();
     }
   }
 
@@ -1210,6 +1464,7 @@ class UI {
       this.resetStep = 0;
       this.placed.clear();
       this.game.newRun('standard', 0);
+      this.game.clearSave(); // a wiped file has no run to continue
       Sfx.lose();
       this.toast('File erased — a fresh case, a fresh start.');
       this.render();
@@ -1260,12 +1515,26 @@ class UI {
 
     // Mid-run picks restart the run; only offer a way back if one is live.
     const canCancel = g.state === 'playing';
+    // A saved run offers a way straight back in, above the fresh-start cases.
+    const save = Game.loadSave();
+    const savedDeck = save && DECKS.find((d) => d.id === save.deckId);
+    const continueRow = save ? `
+      <div class="continue-row">
+        <div>
+          <div class="continue-title">Run in progress &middot; Level ${save.level}</div>
+          <div class="continue-sub">${savedDeck ? savedDeck.name : 'A case'} &middot;
+            ${CFG.DIFFICULTIES[save.difficulty || 0].name}</div>
+        </div>
+        <button class="btn btn-primary" data-act="continue-run">CONTINUE RUN</button>
+      </div>` : '';
+
     this.els['deckpick-card'].innerHTML = `
       <div class="shop-h">
         <h2>CHOOSE YOUR CASE</h2>
         <div class="shop-tickets">${DECKS.filter((d) => g.unlocks.isDeckUnlocked(d)).length}/${DECKS.length} EARNED</div>
       </div>
-      <p class="picker-hint">Every case starts a fresh run.</p>
+      ${continueRow}
+      <p class="picker-hint">Every case starts a fresh run${save ? ', replacing the one above' : ''}.</p>
       <div class="shop-section-title">PAPER SIZE — difficulty</div>
       <div class="diff-row">${diffs}</div>
       <div class="shop-section-title">THE CASE — starting deck</div>
@@ -1277,6 +1546,7 @@ class UI {
   }
 
   onDeckPickClick(e) {
+    if (e.target.closest('[data-act="continue-run"]')) return this.resumeRun();
     const diff = e.target.closest('[data-diff]');
     if (diff) {
       const i = Number(diff.dataset.diff);
@@ -1301,12 +1571,27 @@ class UI {
       Sfx.buy();
       this.toast(`${DECKS.find((d) => d.id === id).name} · ${CFG.DIFFICULTIES[this.diffChoice].name} — new run`);
       this.render();
+      this.game.saveRun(); // the new run becomes the resumable save
       return;
     }
     if (e.target.closest('[data-act="cancel-deck"]')) {
       this.els['deckpick'].classList.add('hidden');
       Sfx.click();
     }
+  }
+
+  // Continue Run: rebuild the saved run and drop back into it (re-showing the
+  // win card if the save landed between a clear and the next level).
+  resumeRun() {
+    const data = Game.loadSave();
+    if (!data) return this.toast('No saved run to continue');
+    this.game.resume(data);
+    this.placed.clear(); // every tile settles fresh on resume
+    this.els['deckpick'].classList.add('hidden');
+    Sfx.buy();
+    this.render();
+    if (this.game.state === 'roundWon') this.showOverlay('won');
+    this.toast(`Resumed — level ${this.game.level}`);
   }
 
   // --- Bag check (deck composition) -------------------------------------------
@@ -1438,6 +1723,7 @@ class UI {
       this.els['shop'].classList.add('hidden');
       this.game.nextLevel();
       this.render();
+      this.game.saveRun(); // shop closed → next round is the new checkpoint
       return;
     }
 
@@ -1445,5 +1731,7 @@ class UI {
     this.renderShop();
     this.renderStats();
     this.renderShelf();
+    this.drainAchievements(); // a shop sticker can earn one; shop skips render()
+    this.game.saveRun();      // persist purchases as they happen
   }
 }

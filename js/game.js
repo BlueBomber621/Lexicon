@@ -10,9 +10,20 @@ class Game {
     this.scoring = new ScoringEngine();
     this.books = new BookManager(this);
     this.unlocks = new Unlocks(this);
+    this.achievements = new Achievements(this);
     this.newUnlocks = []; // Books earned this session, queued for the UI to announce
+    this.newAchievements = []; // achievements earned this session, queued for the UI
     this.pendingNotes = []; // one-off messages for the UI to toast (Sticky Note, ...)
     this.newRun();
+  }
+
+  // Fan a play event out to BOTH progress trackers (unlocks first, so its
+  // lifetime counters are fresh when achievement tests read them), queueing
+  // anything freshly earned for the UI to announce. Every place that used to
+  // call unlocks.notify directly goes through here now.
+  progress(event, data = {}) {
+    this.newUnlocks.push(...this.unlocks.notify(event, data));
+    this.newAchievements.push(...this.achievements.notify(event, data));
   }
 
   // --- Run / round lifecycle -----------------------------------------
@@ -23,7 +34,7 @@ class Game {
     // Count the run being left behind, but only if it was actually played —
     // so booting up and picking a case doesn't burn a run.
     if (this.stats && this.stats.wordsForged > 0) {
-      this.newUnlocks.push(...this.unlocks.notify('runEnd', {}));
+      this.progress('runEnd', {});
     }
     this.deckDef = DECKS.find((d) => d.id === (deckId || this.unlocks.profile.lastDeck))
       || DECKS[0];
@@ -66,7 +77,7 @@ class Game {
     // `tiles` rides along so Books can inspect what was broken (The Shredded
     // Book counts Paper slugs specifically).
     this.books.dispatchGrow('destroy', { n: tiles.length, source, tiles });
-    this.newUnlocks.push(...this.unlocks.notify('destroy', { n: tiles.length, source, tiles }));
+    this.progress('destroy', { n: tiles.length, source, tiles });
   }
 
   startRound() {
@@ -157,19 +168,7 @@ class Game {
     this.lastBossId = this.boss.id;
     this.bossState = {}; // per-round boss scratch (cursed spots, demanded tile, ...)
     this.bossUnregs = [];
-    // Letter rules run on the SILENT channel: they bend each letter's own
-    // value before its count events are emitted (zeroes just skip the count).
-    if (this.boss.letterHook) {
-      this.bossUnregs.push(this.scoring.register('onLetterRule',
-        (ctx, step) => this.boss.letterHook(ctx, step, this, this.bossState),
-        100, { source: 'boss' }));
-    }
-    // Word rules land at priority 100 — AFTER every Book, so caps actually cap.
-    if (this.boss.wordHook) {
-      this.bossUnregs.push(this.scoring.register('onWordForged',
-        (ctx) => this.boss.wordHook(ctx, this, this.bossState),
-        100, { source: 'boss' }));
-    }
+    this.reapplyBossHooks(); // register the letter/word rules on the choke point
     this.plays = Math.max(1, this.plays + (this.boss.playsDelta || 0));
     this.rerolls = Math.max(0, this.rerolls + (this.boss.rerollsDelta || 0));
     this.handSize += this.boss.handDelta || 0;
@@ -181,6 +180,26 @@ class Game {
     this.bossUnregs = [];
     this.boss = null;
     this.bossState = null;
+  }
+
+  // Register the boss's scoring hooks (priority 100, AFTER every Book so caps
+  // actually cap). Split out of applyBoss so a resumed run can re-hook its
+  // boss without re-rolling it or re-applying its economy/round-start effects.
+  reapplyBossHooks() {
+    if (!this.boss) return;
+    this.bossUnregs = this.bossUnregs || [];
+    // Letter rules run on the SILENT channel: they bend each letter's own
+    // value before its count events are emitted.
+    if (this.boss.letterHook) {
+      this.bossUnregs.push(this.scoring.register('onLetterRule',
+        (ctx, step) => this.boss.letterHook(ctx, step, this, this.bossState),
+        100, { source: 'boss' }));
+    }
+    if (this.boss.wordHook) {
+      this.bossUnregs.push(this.scoring.register('onWordForged',
+        (ctx) => this.boss.wordHook(ctx, this, this.bossState),
+        100, { source: 'boss' }));
+    }
   }
 
   // --- Composing (rack ↔ stick) ---------------------------------------
@@ -257,6 +276,52 @@ class Game {
     while (this.stick.length) this.returnToRack(this.stick[this.stick.length - 1].id);
   }
 
+  // Shuffle the rack's display order — a fresh arrangement for inspiration.
+  // Pure reordering: no draw, no cost, the pool is untouched.
+  shuffleRack() {
+    Util.shuffle(this.rack);
+  }
+
+  // --- Free tile movement (drag & drop) ---------------------------------
+  // Pull a tile out of whichever hand zone holds it, returning it (or null).
+  _extract(tileId) {
+    for (const zone of [this.rack, this.stick, this.tray]) {
+      const i = zone.findIndex((t) => t.id === tileId);
+      if (i !== -1) return zone.splice(i, 1)[0];
+    }
+    return null;
+  }
+
+  // Move any hand tile into the stick at a target index (drag to compose /
+  // reorder). Rejects a NEW tile when the stick is already full; the index is
+  // adjusted for the tile's own removal so a within-stick drag lands where the
+  // pointer is.
+  placeInStick(tileId, index) {
+    const cur = this.stick.findIndex((t) => t.id === tileId);
+    if (cur === -1 && this.stick.length >= CFG.STICK_SLOTS) return false;
+    const tile = this._extract(tileId);
+    if (!tile) return false;
+    let i = index;
+    if (cur !== -1 && cur < index) i -= 1; // the removal shifted later slots left
+    i = Math.max(0, Math.min(i, this.stick.length));
+    this.stick.splice(i, 0, tile);
+    return true;
+  }
+
+  // Move any hand tile back to the rack (drag off the stick, or reorder the
+  // rack). index null = append.
+  moveTileToRack(tileId, index = null) {
+    const cur = this.rack.findIndex((t) => t.id === tileId);
+    const tile = this._extract(tileId);
+    if (!tile) return false;
+    if (index == null) { this.rack.push(tile); return true; }
+    let i = index;
+    if (cur !== -1 && cur < index) i -= 1;
+    i = Math.max(0, Math.min(i, this.rack.length));
+    this.rack.splice(i, 0, tile);
+    return true;
+  }
+
   // Draw the hand back up to full; rack + stick + tray together total
   // handSize (RACK_SIZE, less any boss reduction).
   refill() {
@@ -289,7 +354,7 @@ class Game {
     this.rerolls--;
     this.books.onReroll(); // reroll-trigger Books (Salvage Slip) pay out
     this.books.dispatchGrow('reroll'); // The Bellows swells
-    this.newUnlocks.push(...this.unlocks.notify('reroll'));
+    this.progress('reroll');
     return true;
   }
 
@@ -450,8 +515,8 @@ class Game {
     if (this.boss && this.boss.onDraw) this.boss.onDraw(this, this.bossState); // Foreman demands anew
 
     this.books.dispatchGrow('forge', { word: result.word, total: result.total });
-    this.newUnlocks.push(...this.unlocks.notify('forge',
-      { word: result.word, total: result.total, mult: result.mult, repeat }));
+    this.progress('forge',
+      { word: result.word, total: result.total, mult: result.mult, repeat });
 
     let outcome = 'continue';
     if (this.roundScore >= this.target) {
@@ -471,13 +536,143 @@ class Game {
       this.lastTicketsEarned = this.lastPayout.reduce((sum, p) => sum + p.amount, 0);
       this.stats.ticketsEarnedTotal += this.lastTicketsEarned;
       this.books.dispatchGrow('roundWin', { wasBoss: this.isBossLevel }); // First Edition appreciates
-      this.newUnlocks.push(...this.unlocks.notify('roundWin',
+      this.progress('roundWin',
         { wasBoss: this.isBossLevel, tickets: this.lastTicketsEarned,
-          bossId: this.boss ? this.boss.id : null, bossesThisRun: this.bossesThisRun }));
+          bossId: this.boss ? this.boss.id : null, bossesThisRun: this.bossesThisRun });
     } else if (this.plays === 0) {
       outcome = 'lost';
       this.state = 'gameOver';
     }
     return { result, outcome };
+  }
+
+  // --- Save / resume ----------------------------------------------------
+  // A run is snapshotted to localStorage after each action (see UI.saveRun
+  // call sites). The pool is saved as flat tile records + id lists per zone;
+  // Books/consumables/boss are saved by id and rehydrated against content.js.
+
+  serialize() {
+    const ids = (arr) => arr.map((t) => t.id);
+    return {
+      v: 1,
+      level: this.level,
+      difficulty: this.difficulty,
+      deckId: this.deckDef.id,
+      tickets: this.tickets,
+      lastBossId: this.lastBossId,
+      bossesThisRun: this.bossesThisRun,
+      runWords: [...this.runWords],
+      runYCount: this.runYCount,
+      stats: this.stats,
+      // the whole pool + where each tile currently sits
+      tiles: this.deck.all.map((t) => ({ id: t.id, letter: t.letter,
+        variant: t.variant, alteration: t.alteration, bought: !!t.bought })),
+      bag: ids(this.deck.bag), discard: ids(this.deck.discard),
+      rack: ids(this.rack), stick: ids(this.stick), tray: ids(this.tray),
+      nextTileId: Tile.nextId,
+      // round state
+      plays: this.plays, rerolls: this.rerolls, handSize: this.handSize,
+      roundScore: this.roundScore, roundLongest: this.roundLongest,
+      wordsThisRound: this.wordsThisRound, lastWord: this.lastWord,
+      roundRerolledA: this.roundRerolledA,
+      lastTicketsEarned: this.lastTicketsEarned, lastPayout: this.lastPayout,
+      // boss (by id; hooks re-registered on resume)
+      bossId: this.boss ? this.boss.id : null, bossState: this.bossState,
+      // shelf (by id) + per-book scaling state + stickers
+      shelf: this.books.shelf.map((b) => b.id),
+      bookState: this.books.state, stickers: this.books.stickers,
+      consumables: this.consumables.map((c) => c.id),
+      state: this.state,
+    };
+  }
+
+  // Rebuild this Game in place from a serialize() snapshot.
+  resume(data) {
+    this.deckDef = DECKS.find((d) => d.id === data.deckId) || DECKS[0];
+    this.difficulty = data.difficulty || 0;
+    this.level = data.level;
+    this.tickets = data.tickets || 0;
+    this.lastBossId = data.lastBossId || null;
+    this.bossesThisRun = data.bossesThisRun || 0;
+    this.runWords = new Set(data.runWords || []);
+    this.runYCount = data.runYCount || 0;
+    this.stats = data.stats || { wordsForged: 0, bestWord: '—', bestScore: 0,
+      bossesBeaten: 0, ticketsEarnedTotal: 0, tilesDestroyed: 0 };
+
+    // Rehydrate the tile pool, then rebuild each zone by id reference.
+    const byId = new Map();
+    this.deck = new Deck({});
+    this.deck.all = [];
+    for (const t of data.tiles || []) {
+      const tile = new Tile(t.letter, { variant: t.variant, alteration: t.alteration });
+      tile.id = t.id;
+      if (t.bought) tile.bought = true;
+      this.deck.all.push(tile);
+      byId.set(t.id, tile);
+    }
+    Tile.nextId = Math.max(Tile.nextId, data.nextTileId || 0);
+    const pick = (list) => (list || []).map((id) => byId.get(id)).filter(Boolean);
+    this.deck.bag = pick(data.bag);
+    this.deck.discard = pick(data.discard);
+    this.rack = pick(data.rack);
+    this.stick = pick(data.stick);
+    this.tray = pick(data.tray);
+
+    this.plays = data.plays; this.rerolls = data.rerolls; this.handSize = data.handSize;
+    this.roundScore = data.roundScore || 0; this.roundLongest = data.roundLongest || 0;
+    this.wordsThisRound = data.wordsThisRound || 0; this.lastWord = data.lastWord || null;
+    this.roundRerolledA = data.roundRerolledA || 0;
+    this.lastTicketsEarned = data.lastTicketsEarned || 0;
+    this.lastPayout = data.lastPayout || [];
+
+    // Rebuild the shelf (defs by id) + its scaling state and stickers.
+    this.books.clear();
+    for (const id of (data.shelf || [])) {
+      const def = BOOKS.find((b) => b.id === id);
+      if (def) this.books.shelf.push(def);
+    }
+    this.books.state = data.bookState || {};
+    this.books.stickers = data.stickers || {};
+    this.books.syncHooks();
+
+    this.consumables = (data.consumables || [])
+      .map((id) => CONSUMABLES.find((c) => c.id === id)).filter(Boolean);
+
+    // Re-hook the boss if the resumed round is a live boss round.
+    this.clearBoss();
+    if (data.bossId) {
+      this.boss = BOSSES.find((b) => b.id === data.bossId)
+        || BOSSES_IMPERIAL.find((b) => b.id === data.bossId) || null;
+      this.bossState = data.bossState || {};
+      this.bossUnregs = [];
+    }
+    this.state = data.state || 'playing';
+    if (this.boss && this.state === 'playing') this.reapplyBossHooks();
+    return this;
+  }
+
+  // Snapshot the run (or clear it once the run is over).
+  saveRun() {
+    if (this.state === 'gameOver') return this.clearSave();
+    try {
+      localStorage.setItem(CFG.SAVE_KEY, JSON.stringify(this.serialize()));
+    } catch (e) { /* storage blocked — no autosave this session */ }
+  }
+
+  clearSave() {
+    try { localStorage.removeItem(CFG.SAVE_KEY); } catch (e) { /* nothing to do */ }
+  }
+
+  // The saved run, if any and still resumable (not a finished game). Static so
+  // the boot code can check before deciding what to offer.
+  static loadSave() {
+    try {
+      const raw = localStorage.getItem(CFG.SAVE_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      return (data && data.v === 1 && data.state !== 'gameOver') ? data : null;
+    } catch (e) {
+      return null;
+    }
   }
 }

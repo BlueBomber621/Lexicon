@@ -74,6 +74,85 @@ All phone-session work lands on: `claude/file-review-jdleyy`
   the full sweep, no JS errors).
 - **[commit]:** 036b1df
 
+### 007 — 2026-07-19 — Word display: mini-letter particles
+- **File:** `js/ui.js` (`renderReadout` + `ensureWordParticles`/`emitWordParticles`/
+  `stopWordParticles`), `css/style.css` (`.wordfx`, `wordfx-drift`)
+- **What:** While a valid word is set, the readout sheds tiny drifting copies of
+  its own letters; the count scales with word length (more letters = more).
+- **Why:** Requested ambient word-display juice. Emitter stops on forge and when
+  the word goes invalid/empty; gated by `reduceMotion`.
+- **[commit]:** 8101444
+
+### 008 — 2026-07-19 — Word display: length colour scale
+- **File:** `js/ui.js` (`applyWordColor`, `clearWordFx`), `css/style.css`
+  (`#ro-word.valid` background-clip)
+- **What:** The composed word is coloured by length: mid-blue (≤3) → light-blue
+  (4–5) → light-blue→magenta gradient (6–8) → magenta→pink gradient (9–11).
+  Particles are tinted to match.
+- **Why:** Requested colour progression (replaces the flat verdigris "valid"
+  colour with a length scale). Gradient fills clip to the glyphs.
+- **[commit]:** 8101444
+
+### 009 — 2026-07-19 — Achievement system
+- **File:** `js/achievements.js` (new), `js/content.js` (`ACHIEVEMENTS`),
+  `js/config.js` (`ACHIEVEMENTS_KEY`), `js/game.js` (`progress()` + routed
+  events), `js/books.js` (sticker event), `index.html` (6 `#icon-ach-*` emblems,
+  `#achievements` container, script include), `js/ui.js`
+  (`drainAchievements`/`showAchievement`), `css/style.css` (`.ach-pop`)
+- **What:** A cosmetic progress layer parallel to Unlocks, persisted to its own
+  localStorage key. 14 achievements; earning one pops a corner card with icon,
+  title, and task description, which fades away. `Game.progress()` fans every
+  play event to both the unlock tracker and achievements.
+- **Why:** Requested achievement popups. Kept fully separate from game rules —
+  the rules never read achievement state.
+- **[commit]:** 8101444
+
+### 010 — 2026-07-19 — Shuffle button
+- **File:** `js/game.js` (`shuffleRack`), `index.html` (`#btn-shuffle`),
+  `js/ui.js` (`onShuffle`, control disable)
+- **What:** A SHUFFLE button in the controls reorders the rack for inspiration.
+- **Why:** Requested. Pure display reorder — no draw, no cost, pool untouched.
+- **[commit]:** 2291507
+
+### 011 — 2026-07-19 — Slug drag & drop
+- **File:** `js/game.js` (`_extract`, `placeInStick`, `moveTileToRack`),
+  `js/ui.js` (rewrote `onTilePointerDown`; added `_tapTile`, `_makeGhost`,
+  `_moveGhost`, `_dropInfoAt`, `_highlightDrop`, `_clearDropHighlight`,
+  `_dropTile`), `css/style.css` (`.tile-ghost`, `.drop-zone`, `.dragging-src`)
+- **What:** Slugs are now drag & drop — a ghost follows the pointer and drops
+  into the stick (compose/reorder at a slot), the tray (stage a rack slug), or
+  the rack. Plain taps stay the quick move; long-press still shows details.
+  Replaces the old swipe-down-to-tray gesture with drag-to-tray.
+- **Why:** Requested. One pointer path covers mouse and touch.
+- **[commit]:** 2291507
+
+### 012 — 2026-07-19 — Saveable runs (Continue Run)
+- **File:** `js/config.js` (`SAVE_KEY`), `js/game.js` (`serialize`, `resume`,
+  `saveRun`, `clearSave`, static `loadSave`, `reapplyBossHooks` + `applyBoss`
+  refactor), `js/ui.js` (autosave at every action site; `resumeRun`; Continue
+  banner in `renderDeckPick`; `onDeckPickClick` handler), `css/style.css`
+  (`.continue-row`)
+- **What:** The run autosaves to localStorage after each action (pool as flat
+  tile records + per-zone id lists; Books/consumables/boss by id, hooks
+  re-registered on resume). A "Continue Run" banner on the deck-pick screen
+  drops straight back in. Cleared on game over / file reset.
+- **Why:** Requested "continue run." Verified a level-5/42-ticket run survives a
+  full page reload.
+- **[commit]:** 2291507
+
+### 013 — 2026-07-19 — Word colour: continuous & eased (no snapping)
+- **File:** `css/style.css` (`@property --word-c1/--word-c2/--word-glow`,
+  `#ro-word.valid` gradient + `transition`), `js/ui.js` (`applyWordColor`
+  rewritten; new `_rampColor`/`_rgb`; `clearWordFx` clears the vars)
+- **What:** Replaced the four discrete length buckets with a continuous RGB
+  ramp (anchors mid-blue@1 → light-blue@5 → magenta@8 → pink@11, lerped
+  between). The two gradient stops are typed `<color>` custom properties that
+  CSS transitions at 0.28s, so each added/removed letter **eases** to the next
+  colour instead of snapping. Left stop trails the right, so the gradient spread
+  grows smoothly with length.
+- **Why:** Requested — "gradually go to each step, not snap." Refines edit 008.
+- **[commit]:** af3097a
+
 <!--
 ENTRY TEMPLATE (copy for each new edit):
 

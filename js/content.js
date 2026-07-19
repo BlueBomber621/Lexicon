@@ -1044,3 +1044,68 @@ const BAGS = [
     style: { variant: 0.2, alteration: 0.2 },
     desc: 'Pick 2 of 3 peculiar sorts — ligatures, blanks and marks that spell.' },
 ];
+
+// --- Achievements ----------------------------------------------------------
+// A cosmetic progress layer (see js/achievements.js). Each entry pops up in the
+// corner the first time its `test` passes on the matching `event`. Earned state
+// persists to its own localStorage key — the game rules never read it.
+//   icon  — a #icon-ach-* sprite (index.html).
+//   event — 'forge' {word,total,mult,repeat} | 'roundWin' {wasBoss,bossesThisRun}
+//         | 'reroll' | 'destroy' {n} | 'sticker' | 'runEnd' | 'always'.
+//   test  — (data, game) => boolean; runs after the lifetime profile updates,
+//           so it may read game.unlocks.profile counters and live game state.
+
+const ACHIEVEMENTS = [
+  { id: 'first-word', icon: 'icon-ach-quill', title: 'Set the First Line',
+    desc: 'Forge your first word.', event: 'forge', test: () => true },
+
+  { id: 'seven-letters', icon: 'icon-ach-quill', title: 'Broadsheet',
+    desc: 'Forge a word of 7 or more letters.', event: 'forge',
+    test: (d) => !!d.word && d.word.length >= 7 },
+
+  { id: 'full-measure', icon: 'icon-ach-quill', title: 'Full Measure',
+    desc: 'Forge an 11-letter word.', event: 'forge',
+    test: (d) => !!d.word && d.word.length >= 11 },
+
+  { id: 'all-vowels', icon: 'icon-ach-star', title: 'A, E, I, O and U',
+    desc: 'Forge a word containing every vowel.', event: 'forge',
+    test: (d) => !!d.word && [...'AEIOU'].every((v) => d.word.includes(v)) },
+
+  { id: 'vowelless', icon: 'icon-ach-star', title: 'Dry Type',
+    desc: 'Forge a word of 3+ letters with no vowels.', event: 'forge',
+    test: (d) => !!d.word && d.word.length >= 3 && ![...d.word].some((c) => 'AEIOU'.includes(c)) },
+
+  { id: 'off-the-stone', icon: 'icon-ach-flame', title: 'Off the Stone',
+    desc: 'Score 500 or more on a single word.', event: 'forge',
+    test: (d) => (d.total || 0) >= 500 },
+
+  { id: 'red-hot', icon: 'icon-ach-flame', title: 'Red Hot',
+    desc: 'Reach ×25 mult on a single word.', event: 'forge',
+    test: (d) => (d.mult || 0) >= 25 },
+
+  { id: 'first-boss', icon: 'icon-ach-medal', title: 'Blind Broken',
+    desc: 'Defeat your first boss.', event: 'roundWin', test: (d) => !!d.wasBoss },
+
+  { id: 'press-run', icon: 'icon-ach-medal', title: 'Press Run',
+    desc: 'Beat the 3rd boss in a single run.', event: 'roundWin',
+    test: (d) => (d.bossesThisRun || 0) >= 3 },
+
+  { id: 'second-edition', icon: 'icon-ach-book', title: 'Second Edition',
+    desc: 'Reach level 12 in a run.', event: 'roundWin',
+    test: (d, game) => game.level >= 12 },
+
+  { id: 'solvent', icon: 'icon-ach-coin', title: 'Solvent',
+    desc: 'Hold 100 tickets at once.', event: 'always',
+    test: (d, game) => game.tickets >= 100 },
+
+  { id: 'to-the-hellbox', icon: 'icon-ach-flame', title: 'To the Hellbox',
+    desc: 'Melt a slug out of your deck for good.', event: 'destroy',
+    test: (d) => (d.n || 0) > 0 },
+
+  { id: 'spoiled', icon: 'icon-ach-star', title: 'Spoiled for Choice',
+    desc: 'Land your first sticker.', event: 'sticker', test: () => true },
+
+  { id: 'prolific', icon: 'icon-ach-book', title: 'Prolific',
+    desc: 'Forge 100 words (lifetime).', event: 'forge',
+    test: (d, game) => game.unlocks.profile.wordsForged >= 100 },
+];

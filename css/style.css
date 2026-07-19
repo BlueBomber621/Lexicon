@@ -1576,3 +1576,152 @@ body {
   .shelf-book.trigger-pulse .book-icon::before,
   .shelf-book.copy-pulse .book-icon::before { animation: none !important; }
 }
+
+/* ---- Word display: drifting mini-letter particles ----------------------- */
+/* While a valid word is set, the readout sheds tiny copies of its own letters.
+   JS (UI.emitWordParticles) spawns them, more for longer words, coloured to
+   match the length scale; --dx / --dy / --rot carry each one's drift. */
+@keyframes wordfx-drift {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.55) rotate(0deg); }
+  18%  { opacity: 0.72; }
+  100% { opacity: 0; transform: translate(-50%, -50%) translate(var(--dx, 0), var(--dy, -40px)) scale(1.05) rotate(var(--rot, 0deg)); }
+}
+.wordfx {
+  position: fixed;
+  z-index: 3; /* ambient: above the table, below the score-pops (40) & modals */
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 0 8px currentColor;
+  animation: wordfx-drift 1.45s ease-out forwards;
+  will-change: transform, opacity;
+}
+
+/* The composed-word colour is a SMOOTH ramp by length: mid-blue → light-blue
+   → magenta → pink. Both gradient stops are continuous functions of the length
+   (UI.applyWordColor sets them as typed custom properties), and they're typed
+   as <color> so CSS can TRANSITION them — adding/removing a letter eases the
+   colour to the next step instead of snapping. The left stop trails the right
+   by a few letters, so the gradient spread grows with the word. */
+@property --word-c1 { syntax: '<color>'; inherits: false; initial-value: #3f7fd0; }
+@property --word-c2 { syntax: '<color>'; inherits: false; initial-value: #3f7fd0; }
+@property --word-glow { syntax: '<color>'; inherits: false; initial-value: rgba(63, 127, 208, 0.5); }
+#ro-word.valid {
+  background-image: linear-gradient(95deg, var(--word-c1), var(--word-c2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 20px var(--word-glow);
+  transition: --word-c1 0.28s ease, --word-c2 0.28s ease, --word-glow 0.28s ease;
+}
+
+/* ---- Achievement pop-ups (corner) --------------------------------------- */
+#achievements {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none; /* never block the sticky status rail beneath */
+  max-width: min(330px, 82vw);
+}
+
+@keyframes ach-life {
+  0%   { opacity: 0; transform: translateX(46px) scale(0.94); }
+  7%   { opacity: 1; transform: translateX(0) scale(1); }
+  86%  { opacity: 1; transform: translateX(0) scale(1); }
+  100% { opacity: 0; transform: translateX(22px) scale(0.98); }
+}
+.ach-pop {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(180deg, var(--ink-3) 0%, var(--ink-2) 100%);
+  border: 1px solid var(--copper);
+  border-left: 4px solid var(--gold);
+  border-radius: 6px;
+  padding: 11px 15px 11px 12px;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.55);
+  animation: ach-life 4.6s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+.ach-icon {
+  flex-shrink: 0;
+  color: var(--gold);
+  filter: drop-shadow(0 0 6px rgba(212, 160, 23, 0.5));
+}
+.ach-icon svg { width: 42px; height: 42px; display: block; }
+.ach-eyebrow {
+  font-size: 8px;
+  letter-spacing: 2.5px;
+  color: var(--copper-hot);
+  margin-bottom: 2px;
+}
+.ach-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.1;
+  color: var(--paper);
+}
+.ach-desc { font-size: 10.5px; line-height: 1.4; color: var(--paper-dim); margin-top: 2px; }
+
+@media (max-width: 860px) {
+  #achievements { top: 8px; right: 8px; left: 8px; max-width: none; }
+  .ach-title { font-size: 14px; }
+  .ach-icon svg { width: 36px; height: 36px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wordfx { display: none !important; }
+  .ach-pop { animation: ach-life 4.6s linear forwards; } /* keep the fade, drop the slide feel is minor — still gentle */
+  #ro-word.valid { transition: none !important; } /* colour still ramps, just no eased tween */
+}
+
+/* ---- Slug drag & drop --------------------------------------------------- */
+/* Every zone's slugs own their gestures, so the page never grabs them as
+   scroll while dragging. */
+#stick .tile, #tray .tile { touch-action: none; }
+
+/* The lifted clone that follows the pointer while dragging. */
+.tile-ghost {
+  position: fixed;
+  z-index: 55;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(1.12) rotate(-3deg);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.6);
+  opacity: 0.96;
+  animation: none !important;
+}
+/* The slug left behind in its slot fades while its clone is in flight. */
+.tile.dragging-src { opacity: 0.26; }
+
+/* Whichever zone the pointer is over lights up as the drop target. */
+#stick.drop-zone {
+  box-shadow: inset 0 0 0 2px var(--copper-hot), inset 0 2px 8px rgba(0, 0, 0, 0.6),
+              0 3px 10px rgba(0, 0, 0, 0.5);
+}
+#tray.drop-zone { border-color: var(--copper-hot); box-shadow: inset 0 0 0 1px var(--copper-hot); }
+#rack.drop-zone { outline: 2px dashed var(--copper); outline-offset: 5px; border-radius: 6px; }
+
+/* ---- Continue Run banner (deck-pick screen) ----------------------------- */
+.continue-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  background: var(--paper-2);
+  border: 2px solid var(--copper);
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin: 14px 0 4px;
+}
+.continue-title { font-family: var(--font-display); font-weight: 700; font-size: 16px; color: var(--ink); }
+.continue-sub { font-size: 11px; color: #6b6250; margin-top: 2px; }
+.continue-row .btn-primary { flex-shrink: 0; }
+
+@media (max-width: 860px) {
+  .continue-row { flex-direction: column; align-items: stretch; gap: 8px; text-align: center; }
+}
