@@ -1473,3 +1473,106 @@ body {
 }
 
 @keyframes pulse { 50% { opacity: 0.4; } }
+
+/* ============================================================================
+   FX LAYER (v2) — freshened slug & Book juice. Purely additive over the base
+   look: body-level particles/rings for the scoring sweep, living rarity auras
+   on Books, and a table kick on big totals. Everything heavy is switched off
+   under prefers-reduced-motion at the foot of this block.
+   ============================================================================ */
+
+/* Spark particles flung from a scoring trigger (JS sets --dx / --dy / --sz and
+   the colour). Body-level + fixed, so the slug's overflow:hidden never clips. */
+@keyframes fx-spark {
+  0%   { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -50%) translate(var(--dx, 0), var(--dy, 0)) scale(0.2); opacity: 0; }
+}
+.fx-spark {
+  position: fixed;
+  z-index: 45;
+  pointer-events: none;
+  width: var(--sz, 4px);
+  height: var(--sz, 4px);
+  border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
+  animation: fx-spark 0.66s cubic-bezier(0.15, 0.7, 0.3, 1) forwards;
+}
+
+/* Shockwave ring on the heavy hits (×mult, retrigger, boss). */
+@keyframes fx-ring {
+  0%   { width: 10px; height: 10px; opacity: 0.85; }
+  100% { width: 132px; height: 132px; opacity: 0; }
+}
+.fx-ring {
+  position: fixed;
+  z-index: 44;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--copper-hot);
+  border-radius: 50%;
+}
+
+/* The table kicks on the biggest totals (JS sets --shake, toggles .shaking). */
+@keyframes table-shake {
+  0%, 100% { transform: translate(0, 0); }
+  18% { transform: translate(calc(var(--shake, 8px) * -0.7), calc(var(--shake, 8px) *  0.4)); }
+  36% { transform: translate(calc(var(--shake, 8px) *  0.8), calc(var(--shake, 8px) * -0.35)); }
+  54% { transform: translate(calc(var(--shake, 8px) * -0.5), calc(var(--shake, 8px) *  0.45)); }
+  72% { transform: translate(calc(var(--shake, 8px) *  0.35), calc(var(--shake, 8px) * -0.25)); }
+  88% { transform: translate(calc(var(--shake, 8px) * -0.2), calc(var(--shake, 8px) *  0.12)); }
+}
+#table.shaking { animation: table-shake 0.42s ease both; }
+
+/* ---- Book covers: living rarity auras + a trigger bloom ------------------ */
+/* Stacking so the trigger bloom sits BEHIND the cover but the sticker on top. */
+.book-icon { position: relative; z-index: 0; }
+.book-icon > svg:not(.sticker) { position: relative; z-index: 1; }
+.book-icon .sticker { z-index: 2; }
+
+/* A slow breathing glow so rares/uncommons read as premium at a glance.
+   Scoped to The Shelf only — library & shop covers keep their flat tint. */
+@keyframes aura-rare {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(237, 168, 95, 0.30)); }
+  50%      { filter: drop-shadow(0 0 8px rgba(237, 168, 95, 0.70)); }
+}
+@keyframes aura-uncommon {
+  0%, 100% { filter: drop-shadow(0 0 1px rgba(79, 174, 150, 0.22)); }
+  50%      { filter: drop-shadow(0 0 6px rgba(79, 174, 150, 0.50)); }
+}
+.shelf-book .book-icon.r-rare { animation: aura-rare 2.8s ease-in-out infinite; }
+.shelf-book .book-icon.r-uncommon { animation: aura-uncommon 3.4s ease-in-out infinite; }
+
+/* A radial flash blooms behind a Book the instant it triggers / retriggers. */
+.book-icon::before {
+  content: '';
+  position: absolute;
+  inset: -22%;
+  z-index: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(237, 168, 95, 0.55) 0%, transparent 62%);
+  opacity: 0;
+  pointer-events: none;
+}
+.shelf-book.trigger-pulse .book-icon::before { animation: book-glow 0.42s ease; }
+.shelf-book.copy-pulse .book-icon::before {
+  background: radial-gradient(circle, rgba(232, 213, 50, 0.60) 0%, transparent 62%);
+  animation: book-glow 0.42s ease;
+}
+@keyframes book-glow {
+  0%   { opacity: 0; transform: scale(0.55); }
+  40%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.2); }
+}
+
+/* Freshly-scored slugs ease into (and out of) their inked state. */
+.tile.scored { transition: background 0.18s ease, box-shadow 0.18s ease; }
+
+/* ---- Respect reduced-motion: kill the heavy, keep the legible ----------- */
+@media (prefers-reduced-motion: reduce) {
+  .fx-spark, .fx-ring { display: none !important; }
+  #table.shaking { animation: none !important; }
+  .shelf-book .book-icon.r-rare,
+  .shelf-book .book-icon.r-uncommon { animation: none !important; filter: none; }
+  .shelf-book.trigger-pulse .book-icon::before,
+  .shelf-book.copy-pulse .book-icon::before { animation: none !important; }
+}

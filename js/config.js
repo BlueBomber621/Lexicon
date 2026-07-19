@@ -115,5 +115,15 @@ const CFG = {
     TOTAL_HOLD: 650,    // pause on the final total
     SPEND: 350,         // spent slugs fading off to the hellbox
     TRAY_FIRE: 300,     // beat between the 3rd tray tile landing and the auto-reroll
+
+    // Scoring-sweep juice (the "amp up" layer — body-level particles, rings,
+    // and a table shake). All of it is skipped under prefers-reduced-motion
+    // (see UI.reduceMotion / the media block in style.css).
+    FX: {
+      SPARKS: 9,        // spark particles flung per impactful trigger
+      SPARK_DIST: 46,   // px they travel outward
+      SHAKE_MAX: 12,    // px the table throws on the biggest totals
+      BIG_PTS: 12,      // a single point count >= this also throws sparks
+    },
   },
 };

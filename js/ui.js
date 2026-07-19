@@ -15,6 +15,7 @@ class UI {
 
     // Cache every element we touch once.
     const ids = [
+      'table',
       'stat-level', 'stat-target', 'stat-score', 'stat-plays', 'stat-rerolls',
       'stat-tickets', 'stat-bag', 'stat-discard', 'target-fill', 'stat-difficulty',
       'boss-panel', 'boss-name', 'boss-desc', 'boss-seal',
@@ -32,6 +33,11 @@ class UI {
     ];
     this.els = {};
     for (const id of ids) this.els[id] = document.getElementById(id);
+
+    // Honour the OS "reduce motion" setting: the FX layer (sparks, rings,
+    // table shake) goes quiet, while the legible pulses/pops stay.
+    this.reduceMotion = window.matchMedia
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     this.els['btn-forge'].addEventListener('click', () => this.onForge());
     this.els['btn-reroll'].addEventListener('click', () => this.onReroll());
@@ -745,7 +751,8 @@ class UI {
 
       if (el) {
         this.pulse(el, ev.type === 'copy');
-        if (text) this.popNumber(el, text, cls);
+        if (text) this.popNumber(el, text, cls, this.popScale(ev));
+        this.eventFx(el, ev); // sparks / rings on the impactful counts
       }
       if (ev.i != null && tileEls[ev.i]) tileEls[ev.i].classList.add('scored');
       if (ev.runP != null) this.els['ro-points'].textContent = Util.fmt(ev.runP);
@@ -763,6 +770,10 @@ class UI {
     this.els['ro-eq'].classList.remove('hidden');
     Sfx.total();
     await Util.countUp(this.els['ro-total'], 0, result.total, A.TOTAL_COUNT);
+    // The total lands: kick the table (harder the closer it is to the target)
+    // and burst copper from the number itself.
+    this.shake(Math.min(1, result.total / Math.max(1, this.game.target)));
+    this.burst(this.els['ro-total'], '#eda85f', 16, 72);
     this.renderStats(); // round score + progress bar catch up
     await Util.sleep(A.TOTAL_HOLD);
 
@@ -778,16 +789,116 @@ class UI {
     el.classList.add(isCopy ? 'copy-pulse' : 'trigger-pulse');
   }
 
-  // A floating number that rises out of the source element and fades.
-  popNumber(el, text, cls) {
+  // A floating number that rises out of the source element and fades. Bigger
+  // counts pop bigger (scale) with a little horizontal jitter so a long sweep
+  // never stacks identical numbers in one column.
+  popNumber(el, text, cls, scale = 1) {
     const r = el.getBoundingClientRect();
     const pop = document.createElement('span');
     pop.className = `score-pop ${cls}`;
     pop.textContent = text;
-    pop.style.left = `${r.left + r.width / 2}px`;
+    pop.style.left = `${r.left + r.width / 2 + (Math.random() * 14 - 7)}px`;
     pop.style.top = `${r.top - 6}px`;
+    if (scale !== 1) pop.style.fontSize = `${(15 * scale).toFixed(1)}px`;
     document.body.appendChild(pop);
     setTimeout(() => pop.remove(), 800);
+  }
+
+  // How much to enlarge a count's floating number, by how big the count is.
+  popScale(ev) {
+    if (ev.type === 'tilePts' || ev.type === 'bookPts') return Math.min(1.5, 1 + (ev.amt || 0) / 60);
+    if (ev.amt) return Math.min(1.6, 1 + ev.amt / 12);   // additive mult
+    if (ev.x) return Math.min(1.7, 0.9 + ev.x * 0.35);   // ×mult
+    return 1;
+  }
+
+  // The "amp up" layer: spark bursts and shockwave rings on the impactful
+  // counts, colour-matched to what fired. All body-level (see burst/shockwave),
+  // so a slug's overflow:hidden never clips them, and all skipped when
+  // reduceMotion is set.
+  eventFx(el, ev) {
+    const PTS = '#eda85f', MULT = '#c04a32', GOLD = '#d4a017', COPY = '#e8d532';
+    switch (ev.type) {
+      case 'tilePts':
+      case 'bookPts':
+        if ((ev.amt || 0) >= CFG.ANIM.FX.BIG_PTS) this.burst(el, PTS, 6);
+        break;
+      case 'tileMult':
+      case 'bookMult':
+        this.burst(el, MULT, 8);
+        break;
+      case 'tileXMult':
+      case 'bookXMult':
+        this.burst(el, MULT, 12);
+        this.shockwave(el, MULT);
+        break;
+      case 'sticker':
+        this.burst(el, GOLD, 8);
+        if (ev.kind === 'xMult') this.shockwave(el, GOLD);
+        break;
+      case 'ticket':
+        this.burst(el, GOLD, 6);
+        break;
+      case 'copy':
+        this.burst(el, COPY, 12);
+        this.shockwave(el, COPY);
+        break;
+      case 'boss':
+        this.burst(el, MULT, 14);
+        this.shockwave(el, MULT);
+        this.shake(0.4);
+        break;
+    }
+  }
+
+  // A burst of spark particles flung outward from an element's centre.
+  burst(el, color, count = CFG.ANIM.FX.SPARKS, spread = CFG.ANIM.FX.SPARK_DIST) {
+    if (this.reduceMotion || !el) return;
+    const r = el.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const frag = document.createDocumentFragment();
+    for (let k = 0; k < count; k++) {
+      const s = document.createElement('span');
+      s.className = 'fx-spark';
+      const ang = (Math.PI * 2 * k) / count + Math.random() * 0.7;
+      const dist = spread * (0.55 + Math.random() * 0.7);
+      s.style.left = `${cx}px`;
+      s.style.top = `${cy}px`;
+      s.style.color = color;      // box-shadow glow uses currentColor
+      s.style.background = color;
+      s.style.setProperty('--dx', `${(Math.cos(ang) * dist).toFixed(1)}px`);
+      s.style.setProperty('--dy', `${(Math.sin(ang) * dist).toFixed(1)}px`);
+      s.style.setProperty('--sz', `${(3 + Math.random() * 3).toFixed(1)}px`);
+      frag.appendChild(s);
+      setTimeout(() => s.remove(), 720);
+    }
+    document.body.appendChild(frag);
+  }
+
+  // A shockwave ring that expands and fades from an element's centre.
+  shockwave(el, color) {
+    if (this.reduceMotion || !el) return;
+    const r = el.getBoundingClientRect();
+    const ring = document.createElement('span');
+    ring.className = 'fx-ring';
+    ring.style.left = `${r.left + r.width / 2}px`;
+    ring.style.top = `${r.top + r.height / 2}px`;
+    ring.style.borderColor = color;
+    document.body.appendChild(ring);
+    setTimeout(() => ring.remove(), 640);
+  }
+
+  // Kick the table; intensity 0..1 scales the throw (capped by CFG).
+  shake(intensity) {
+    if (this.reduceMotion) return;
+    const t = this.els['table'];
+    if (!t) return;
+    const px = Math.max(3, Math.min(CFG.ANIM.FX.SHAKE_MAX, 3 + intensity * CFG.ANIM.FX.SHAKE_MAX));
+    t.style.setProperty('--shake', `${px.toFixed(1)}px`);
+    t.classList.remove('shaking');
+    void t.offsetWidth; // restart the animation
+    t.classList.add('shaking');
+    setTimeout(() => t.classList.remove('shaking'), 440);
   }
 
   // --- Overlay (round end / game over) -------------------------------------
