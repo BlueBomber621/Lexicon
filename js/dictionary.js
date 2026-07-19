@@ -43,21 +43,26 @@ class Dictionary {
       && this.words.has(w);
   }
 
-  // Substitution Books let a tile letter stand in for others. `subs` maps a
-  // letter to every letter it may ALSO be read as. Returns the dictionary
-  // word this composition can be read as, or null. Scans same-length words
-  // and rejects on the first mismatched position, so it stays cheap.
-  findReading(word, subs) {
-    const w = word.toUpperCase();
-    const opts = [...w].map((c) => (subs[c] ? [c, ...subs[c]] : [c]));
-    const list = this.byLength.get(w.length) || [];
+  // The one matcher behind substitution Books, wildcard sorts and
+  // multi-letter sorts: `opts` is a per-POSITION list of acceptable letters.
+  // Returns the dictionary word this composition reads as, or null. Scans
+  // only same-length words and bails on the first mismatch, so it stays cheap
+  // no matter how many positions are open.
+  findReadingFromOptions(opts) {
+    const list = this.byLength.get(opts.length) || [];
     outer:
     for (const dw of list) {
-      for (let i = 0; i < w.length; i++) {
+      for (let i = 0; i < opts.length; i++) {
         if (!opts[i].includes(dw[i])) continue outer;
       }
       return dw;
     }
     return null;
+  }
+
+  // Convenience wrapper for a plain letter string plus substitution map.
+  findReading(word, subs) {
+    const w = word.toUpperCase();
+    return this.findReadingFromOptions([...w].map((c) => (subs[c] ? [c, ...subs[c]] : [c])));
   }
 }

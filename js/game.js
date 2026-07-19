@@ -44,6 +44,7 @@ class Game {
     this.lastBossId = null;
     this.runWords = new Set(); // every word forged this run (Errata's unlock)
     this.runYCount = 0;        // Y slugs played this run (Quizlet's unlock)
+    this.bossesThisRun = 0;    // how deep this run has gone (boss-depth unlocks)
     this.stats = {
       wordsForged: 0, bestWord: '—', bestScore: 0,
       bossesBeaten: 0, ticketsEarnedTotal: 0, tilesDestroyed: 0,
@@ -189,24 +190,40 @@ class Game {
   }
 
   // 'empty' | 'valid' | 'invalid' — drives the readout and the Forge button.
-  // Spelling check, including any substitution Books on the shelf. Sets
-  // this.reading to the dictionary word the composition was read as when it
-  // only spells through a substitution (null otherwise), for the readout.
-  spellsAWord(w) {
-    this.reading = null;
-    if (this.dict.isValidWord(w)) return true;
-    if (!this.books.hasSubstitutions) return false;
-    if (w.length < CFG.MIN_WORD_LEN || w.length > CFG.MAX_WORD_LEN) return false;
-    const read = this.dict.findReading(w, this.books.substitutions());
-    this.reading = read;
-    return !!read;
+  // Resolve what the composed slugs actually spell. Every slug contributes
+  // one or more POSITIONS, each carrying the letters it will accept:
+  // a plain slug accepts its own letter (plus any substitution Books allow),
+  // a multi-letter sort contributes several positions, a wildcard accepts
+  // anything. Returns { word, perTile } where perTile[i] is the letters that
+  // slug ended up spelling, or null when it spells nothing in the dictionary.
+  resolveStick(tiles = this.stick) {
+    if (tiles.length === 0) return null;
+    const subs = this.books.substitutions();
+    const opts = [];
+    const spans = []; // how many positions each slug occupies
+    for (const t of tiles) {
+      const spells = slugSpells(t.letter);
+      if (spells === null) { opts.push(ALL_LETTERS); spans.push(1); continue; }
+      for (const c of spells) opts.push(subs[c] ? [c, ...subs[c]] : [c]);
+      spans.push(spells.length);
+    }
+    if (opts.length < CFG.MIN_WORD_LEN || opts.length > CFG.MAX_WORD_LEN) return null;
+    const word = this.dict.findReadingFromOptions(opts);
+    if (!word) return null;
+    const perTile = [];
+    let at = 0;
+    for (const span of spans) { perTile.push(word.slice(at, at + span)); at += span; }
+    return { word, perTile };
   }
 
   stickStatus() {
     if (this.stick.length === 0) return 'empty';
-    const w = this.stickWord();
-    if (!this.spellsAWord(w)) return 'invalid';
-    if (this.boss && this.boss.validWord && !this.boss.validWord(w)) return 'invalid';
+    const res = this.resolveStick();
+    this.reading = null;
+    if (!res) return 'invalid';
+    // Show the reading whenever it differs from the glyphs on the slugs.
+    if (res.word !== this.stickWord()) this.reading = res.word;
+    if (this.boss && this.boss.validWord && !this.boss.validWord(res.word)) return 'invalid';
     if (this.boss && this.boss.validPlay && !this.boss.validPlay(this, this.bossState)) return 'invalid';
     return 'valid';
   }
@@ -214,7 +231,9 @@ class Game {
   // Live score breakdown for the readout; null unless the word is valid.
   // Not committed: Books with outside-the-ctx effects (tickets) stay quiet.
   previewScore() {
-    return this.stickStatus() === 'valid' ? this.scoring.score(this.stick) : null;
+    if (this.stickStatus() !== 'valid') return null;
+    const res = this.resolveStick();
+    return this.scoring.score(this.stick, { word: res.word, spells: res.perTile });
   }
 
   // Shared zone-to-zone mover: splices the tile out of `from`, pushes to `to`.
@@ -394,7 +413,9 @@ class Game {
     // Scoring happens FIRST: Second Impression / Errata read wordsThisRound
     // and lastWord as they stood before this word. `game` rides along so
     // ticket-clipping tiles (Cardstock) can pay out on commit.
-    const result = this.scoring.score(this.stick.slice(), { commit: true, game: this });
+    const res = this.resolveStick();
+    const result = this.scoring.score(this.stick.slice(),
+      { commit: true, game: this, word: res && res.word, spells: res && res.perTile });
 
     this.plays--;
     this.roundScore += result.total;
@@ -430,7 +451,7 @@ class Game {
 
     this.books.dispatchGrow('forge', { word: result.word, total: result.total });
     this.newUnlocks.push(...this.unlocks.notify('forge',
-      { word: result.word, total: result.total, repeat }));
+      { word: result.word, total: result.total, mult: result.mult, repeat }));
 
     let outcome = 'continue';
     if (this.roundScore >= this.target) {
@@ -438,7 +459,7 @@ class Game {
       // but they're worth tickets. The payout is itemised for the win card.
       outcome = 'won';
       this.state = 'roundWon';
-      if (this.isBossLevel) this.stats.bossesBeaten++;
+      if (this.isBossLevel) { this.stats.bossesBeaten++; this.bossesThisRun++; }
       this.lastPayout = [
         { label: `Longest word — ${this.roundLongest} letters`,
           amount: this.roundLongest * CFG.TICKETS_PER_LETTER },
@@ -452,7 +473,7 @@ class Game {
       this.books.dispatchGrow('roundWin', { wasBoss: this.isBossLevel }); // First Edition appreciates
       this.newUnlocks.push(...this.unlocks.notify('roundWin',
         { wasBoss: this.isBossLevel, tickets: this.lastTicketsEarned,
-          bossId: this.boss ? this.boss.id : null }));
+          bossId: this.boss ? this.boss.id : null, bossesThisRun: this.bossesThisRun }));
     } else if (this.plays === 0) {
       outcome = 'lost';
       this.state = 'gameOver';
