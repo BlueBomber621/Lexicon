@@ -1,5 +1,7 @@
 # LEXICON
 
+The letter deck-building rogue-lite game! Created by Claude, directed by me!
+
 A word-forging roguelike deck-builder. Balatro's structure — escalating
 targets, joker-driven scoring, shop economy — but the scoring engine is
 valid English words. Letter tiles are the deck, **Books** are the jokers,
