@@ -6,9 +6,12 @@ const CFG = {
   // --- Composing ------------------------------------------------------
   RACK_SIZE: 12,        // total hand size (rack + stick + tray); 1 more than the
                         // stick holds, so the extra tile is selection headroom
-  STICK_SLOTS: 11,      // slots on the composing stick (max word length)
+  STICK_SLOTS: 11,      // physical slots on the composing stick
   MIN_WORD_LEN: 1,      // shortest playable word
-  MAX_WORD_LEN: 11,     // longest playable word (must match STICK_SLOTS)
+  MAX_WORD_LEN: 20,     // longest RESOLVED word the dict/validation accepts.
+                        // Deliberately decoupled from STICK_SLOTS: multi-letter
+                        // sorts (Œ→CE, &→AND) spell more letters than the slots
+                        // they occupy, so a full 11-slot stick can read up to 20.
 
   // --- Round economy --------------------------------------------------
   PLAYS_PER_ROUND: 3,   // words you may forge per round
