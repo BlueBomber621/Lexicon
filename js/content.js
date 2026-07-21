@@ -727,7 +727,7 @@ const BOOKS = [
       test: (data, profile) => profile.itemsBought >= 100 } },
 
   { id: 'spellbook', name: 'The Spellbook', rarity: 'rare', cost: 9, trigger: 'passive',
-    desc: 'Every slug with no text alteration retriggers.',
+    desc: 'Every slug with a material but no text alteration retriggers.',
     flavor: 'The unmarked sorts know the words by heart.',
     preScore: (ctx) => { ctx.retriggerPlain = true; },
     unlock: { desc: 'Beat the 3rd boss of a run on Demy difficulty or above.',
