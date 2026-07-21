@@ -155,6 +155,12 @@ class BookManager {
         this.unregisters.push(this.game.scoring.register(
           'onLetterSetup', (ctx, step) => book.letterSetup(ctx, step, this.game), 0, { source: 'book' }));
       }
+      // Silent per-letter rules (The Censored Edition zeroing E) run AFTER the
+      // slug's own material/alteration, on the same channel bosses use.
+      if (book.letterRule) {
+        this.unregisters.push(this.game.scoring.register(
+          'onLetterRule', (ctx, step) => book.letterRule(ctx, step, this.game), 0, { source: 'book' }));
+      }
       // Raw pre-scoring setup (The Journal's Comic Sans rule, The Scroll's
       // inking) — runs before any counting, outside the effect vocabulary.
       if (book.preScore) {
@@ -231,8 +237,10 @@ class BookManager {
         kind: 'mult', runP: ctx.points, runM: ctx.mult });
     }
     if (e.xMult) {
-      ctx.mult *= e.xMult;
-      ctx.events.push({ type: 'sticker', b, stickerId: sticker.id, x: e.xMult,
+      // The Magazine bumps Bestseller Stickers from ×1.5 to ×2 while shelved.
+      const x = (sticker.id === 'bestseller' && ctx.bestsellerBoost) ? 2 : e.xMult;
+      ctx.mult *= x;
+      ctx.events.push({ type: 'sticker', b, stickerId: sticker.id, x,
         kind: 'xMult', runP: ctx.points, runM: ctx.mult });
     }
   }
