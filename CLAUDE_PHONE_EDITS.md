@@ -12,8 +12,10 @@ reconcile against the "original."
 - Each entry lists the **file(s) touched**, **what changed**, and **why**.
 - The `[commit]` tag (if present) links the edit to a git commit on this
   branch, so you can `git show` the exact diff on the computer.
-- Once you've reconciled a batch on the computer, delete those entries (or move
-  them under a `## Reconciled` heading) to keep the live list short.
+- Entries under **Pending** (below the ✅ divider) are new since the last
+  computer reconcile. Everything **above** the divider has been pulled to the
+  desktop and acknowledged. When you acknowledge the next batch, move the
+  divider down past it and bump its "through entry NNN" number.
 
 ## Branch
 
@@ -152,6 +154,21 @@ All phone-session work lands on: `claude/file-review-jdleyy`
   grows smoothly with length.
 - **Why:** Requested — "gradually go to each step, not snap." Refines edit 008.
 - **[commit]:** af3097a
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
+## ✅ Acknowledged through entry 013 · reconciled on the computer 2026-07-21
+
+Entries **001–013** above were pulled to the computer and **acknowledged on
+2026-07-21**. Everything below this divider is new phone-session work since the
+last reconcile. When the next batch is acknowledged, move this divider down past
+it and bump the "through entry NNN".
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
+## Pending — new phone edits (since last reconcile)
+
+_None yet — the next phone-session edit will be logged here._
 
 <!--
 ENTRY TEMPLATE (copy for each new edit):
