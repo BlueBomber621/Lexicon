@@ -168,7 +168,25 @@ it and bump the "through entry NNN".
 
 ## Pending — new phone edits (since last reconcile)
 
-_None yet — the next phone-session edit will be logged here._
+### 014 — 2026-07-21 — Expansion set: 14 new Books
+- **File:** `js/content.js` (14 `BOOKS` entries), `index.html` (14
+  `#icon-book-*` covers), `js/unlocks.js` (`itemsBought`/`heavyLettersPlayed`
+  counters + `buy` event), `js/game.js` (`runPensUsed`, `roundLetters`,
+  `freePurchase`; forge feeds `heavy`/`multiSorts`/round-letters; Insurance
+  Form payout; save/resume), `js/shop.js` (Coupon free purchase via `spend()`;
+  `buy`/`bag` events; Business Contract ticketless sell + `grow.sell`),
+  `js/scoring.js` (`retriggerPlain`), `js/books.js` (book `letterRule` channel;
+  Magazine Bestseller ×2)
+- **What:** Digraph, Kerning, Abecedarian, The Bodkin, The Padlocked Book, The
+  Almanac, Business Contract, Coupon Book, Spellbook, Magazine, Censored
+  Edition, Insurance Form, The Switch, Empty Book — each with a cover and unlock.
+- **Why:** Requested expansion batch (with your tweaks/renames/unlock conditions).
+  New engine hooks: `buy`/`bag` events + lifetime item counter, per-run pen
+  counter, per-round letter set, plain-slug retrigger, book letter-rule channel,
+  Coupon free-purchase, Insurance last-resort.
+- **Verified:** headless — every mechanic checked through the real engine; all
+  14 covers render; no JS errors.
+- **[commit]:** f4ac6aa
 
 <!--
 ENTRY TEMPLATE (copy for each new edit):
