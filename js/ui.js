@@ -29,6 +29,7 @@ class UI {
       'btn-bagcheck', 'bagcheck', 'bagcheck-card',
       'picker', 'picker-card',
       'deckpick', 'deckpick-card',
+      'winscreen', 'winscreen-card',
       'hovertip', 'btn-reset', 'reset', 'reset-card', 'hint',
     ];
     this.els = {};
@@ -55,6 +56,7 @@ class UI {
     });
     this.els['picker-card'].addEventListener('click', (e) => this.onPickerClick(e));
     this.els['deckpick-card'].addEventListener('click', (e) => this.onDeckPickClick(e));
+    this.els['winscreen-card'].addEventListener('click', (e) => this.onWinScreenClick(e));
     this.els['penpick-card'].addEventListener('click', (e) => this.onPenPickClick(e));
     // One delegated listener covers every shop button.
     this.els['shop-card'].addEventListener('click', (e) => this.onShopClick(e));
@@ -920,6 +922,8 @@ class UI {
       if (e.key === 'Enter') this.onOverlayButton();
       return;
     }
+    // Victory screen open: button-driven only, so swallow game keys.
+    if (!this.els['winscreen'].classList.contains('hidden')) return;
     if (!this.els['shop'].classList.contains('hidden')) return;
 
     if (e.key === 'Enter') {
@@ -954,6 +958,7 @@ class UI {
     this.saveRun(); // snapshot post-forge (or clear the save if the run just ended)
 
     if (outcome === 'won') { Sfx.win(); this.showOverlay('won'); }
+    else if (outcome === 'wonGame') { Sfx.win(); this.showWinScreen(); }
     else if (outcome === 'lost') { Sfx.lose(); this.showOverlay('lost'); }
   }
 
@@ -1198,6 +1203,95 @@ class UI {
     }
   }
 
+  // --- Victory screen (winning boss beaten) --------------------------------
+
+  showWinScreen() {
+    this.winStep = 'main'; // 'main' = stats + Endless/Menu; 'save' = save/stop
+    this.renderWinScreen();
+    this.els['winscreen'].classList.remove('hidden');
+  }
+
+  renderWinScreen() {
+    const g = this.game;
+    const s = g.stats;
+
+    if (this.winStep === 'save') {
+      this.els['winscreen-card'].innerHTML = `
+        <div class="shop-h"><h2>KEEP THIS RUN?</h2></div>
+        <p class="picker-hint">Save it to carry the same deck into <b>Endless</b> later,
+          or close the book on it and return to the menu.</p>
+        <div class="shop-foot win-foot">
+          <button class="btn" data-act="win-stop">STOP THE RUN</button>
+          <button class="btn btn-primary" data-act="win-save">SAVE FOR ENDLESS</button>
+        </div>`;
+      return;
+    }
+
+    const book = g.mostEffectiveBook();
+    const stat = (label, value, sub = '') => `
+      <div class="win-stat"><span>${label}</span><b>${value}</b>${sub ? `<i>${sub}</i>` : ''}</div>`;
+    const stats = `
+      <div class="win-stats">
+        ${stat('Best word', s.bestWord, `${Util.fmt(s.bestScore)} pts`)}
+        ${stat('Words forged', s.wordsForged)}
+        ${stat('Bosses bound', s.bossesBeaten)}
+        ${stat('Tickets earned', Util.fmt(s.ticketsEarnedTotal))}
+        ${stat('Tiles destroyed', s.tilesDestroyed)}
+        ${stat('Final deck', `${g.deck.all.length} slugs`)}
+        ${book ? `<div class="win-stat win-stat-book"><span>Most valuable Book</span>
+          <b>${book.name}</b><i>+${Util.fmt(book.output)} to your scores</i></div>` : ''}
+      </div>`;
+
+    this.els['winscreen-card'].innerHTML = `
+      <div class="shop-h">
+        <h2>MAGNUM OPUS</h2>
+        <div class="shop-tickets">${CFG.WIN_BOSSES} / ${CFG.WIN_BOSSES} BOSSES</div>
+      </div>
+      <p class="picker-hint">You bound all ${CFG.WIN_BOSSES} presses — the run is won on
+        <b>${CFG.DIFFICULTIES[g.difficulty || 0].name}</b>.</p>
+      ${stats}
+      <div class="shop-foot win-foot">
+        <button class="btn" data-act="win-menu">MAIN MENU</button>
+        <button class="btn btn-primary" data-act="win-endless">ENTER ENDLESS &rarr;</button>
+      </div>`;
+  }
+
+  onWinScreenClick(e) {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const act = btn.dataset.act;
+    // Both "play now" and "save for later" flag the run Endless and advance
+    // into its first level; the winning-boss shop is skipped (balance is moot
+    // past the win). Stop clears the save. Main Menu opens the save/stop step.
+    if (act === 'win-endless') {
+      this.game.endless = true;
+      this.game.nextLevel();
+      this.els['winscreen'].classList.add('hidden');
+      this.placed.clear();
+      Sfx.buy();
+      this.render();
+      this.game.saveRun();
+      this.toast('Endless — the press runs on.');
+    } else if (act === 'win-menu') {
+      this.winStep = 'save';
+      Sfx.click();
+      this.renderWinScreen();
+    } else if (act === 'win-save') {
+      this.game.endless = true;
+      this.game.nextLevel();
+      this.game.saveRun(); // a resumable Endless run waits on the menu
+      this.els['winscreen'].classList.add('hidden');
+      Sfx.buy();
+      this.toast('Saved — resume in Endless from the menu.');
+      this.openDeckPick();
+    } else if (act === 'win-stop') {
+      this.game.clearSave();
+      this.els['winscreen'].classList.add('hidden');
+      Sfx.click();
+      this.openDeckPick();
+    }
+  }
+
   // --- The Foundry (shop) ---------------------------------------------------
 
   renderShop() {
@@ -1277,8 +1371,8 @@ class UI {
       <div class="shop-section-title">YOUR SHELF — sell for half</div>
       ${shelfRows}
       <div class="shop-foot">
-        <button class="btn btn-buy" data-act="restock" ${s.canAfford(CFG.RESTOCK_COST) ? '' : 'disabled'}>
-          RESTOCK · ${tk(CFG.RESTOCK_COST)}</button>
+        <button class="btn btn-buy" data-act="restock" ${s.canAfford(g.rerollCost) ? '' : 'disabled'}>
+          RESTOCK · ${tk(g.rerollCost)}</button>
         <button class="btn btn-primary" data-act="close">NEXT LEVEL &rarr;</button>
       </div>`;
   }

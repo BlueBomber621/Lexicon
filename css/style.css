@@ -1129,6 +1129,57 @@ body {
 .deck-icon.deck-locked { filter: grayscale(1) brightness(0.6); }
 .deck-card .btn-buy { margin-top: 4px; }
 
+/* ---- Victory screen (winning boss) ------------------------------------- */
+
+#winscreen {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 8, 5, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 14; /* above the deck picker */
+  padding: 24px;
+}
+
+#winscreen-card {
+  width: min(620px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 3px;
+  padding: 28px 34px;
+  box-shadow: 0 12px 44px rgba(0, 0, 0, 0.7);
+  border: 1px solid #c9bd9f;
+}
+
+.win-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin: 18px 0 22px;
+}
+.win-stat {
+  border: 1px solid #c9bd9f;
+  border-radius: 3px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.02);
+}
+.win-stat span {
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.win-stat b { font-family: var(--font-display); font-size: 20px; line-height: 1.1; }
+.win-stat i { font-size: 11px; font-style: normal; color: var(--press-red); }
+.win-stat-book { grid-column: 1 / -1; }
+.win-foot { display: flex; justify-content: space-between; gap: 12px; }
+
 /* ---- Count-up events: pulses + floating numbers --------------------------- */
 
 /* The trigger dilation: swell a touch, flash brighter, ease back fast. */
@@ -1400,15 +1451,16 @@ body {
   #hint { font-size: 9px; line-height: 1.5; text-align: center; max-width: 340px; }
 
   /* Overlays: full-bleed cards that scroll. */
-  #overlay, #shop, #library, #bagcheck, #picker, #deckpick, #penpick, #reset { padding: 10px; }
+  #overlay, #shop, #library, #bagcheck, #picker, #deckpick, #penpick, #reset, #winscreen { padding: 10px; }
   #overlay-card, #shop-card, #library-card, #bagcheck-card,
-  #picker-card, #deckpick-card, #penpick-card, #reset-card {
+  #picker-card, #deckpick-card, #penpick-card, #reset-card, #winscreen-card {
     width: 100%;
     max-height: 92dvh;
     overflow-y: auto;
     padding: 18px 16px;
     -webkit-overflow-scrolling: touch;
   }
+  .win-stats { grid-template-columns: 1fr; }
   .shop-h h2 { font-size: 21px; letter-spacing: 1px; }
   .shop-row { gap: 8px; justify-content: center; }
   .shop-card, .pen-card { width: 100%; max-width: 260px; }

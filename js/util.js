@@ -21,6 +21,14 @@ const Util = {
     return n.toLocaleString('en-US');
   },
 
+  // Round to 2 significant figures: keep the two leading digits, zero the rest
+  // (1737 -> 1700, 12480 -> 12000, 640 -> 640). The score-goal rounding rule.
+  sig2(n) {
+    if (!isFinite(n) || n <= 0) return n > 0 ? n : 0;
+    const mag = Math.pow(10, Math.floor(Math.log10(n)) - 1);
+    return Math.round(n / mag) * mag;
+  },
+
   // Does the slug at this step spell any letter from `set`? Multi-letter
   // sorts and resolved wildcards count, so Œ registers as containing an E.
   spellsAny(step, set) {
