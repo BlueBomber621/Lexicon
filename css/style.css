@@ -63,16 +63,89 @@ body {
   min-width: 0; /* let the flex child shrink below its content width */
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 22px;
-  padding: 24px;
   /* Fluid slug width: 56px normally, shrinks so all 12 rack tiles fit a
      narrow pane. Sidebar is a fixed 250px; the rest accounts for padding
      and inter-tile gaps. */
   --tile-w: min(56px, calc((100vw - 396px) / 12));
   --tile-h: calc(var(--tile-w) * 1.18);
 }
+
+/* Top bar: Bin · Shelf · Consumables, across the top of the table. It stays in
+   normal flow; the shop renders inline below it, so there's no floating layer. */
+#topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+  padding: 14px 20px 8px;
+  flex-shrink: 0;
+}
+
+/* The Bin: a one-slug stash, shown left of the shelf between rounds. */
+#bin { display: flex; }
+#bin-slot {
+  width: 62px;
+  min-height: 88px;
+  border-radius: 4px;
+  border: 1px dashed var(--copper);
+  background: linear-gradient(180deg, #2b2114 0%, var(--ink-2) 100%);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 4px 2px;
+}
+#bin-slot.bin-over { outline: 2px dashed var(--copper); outline-offset: 2px; }
+#bin-slot .shelf-book { cursor: grab; }
+#bin-hint { font-size: 7px; color: var(--paper-dim); max-width: 62px; text-align: center; line-height: 1.2; }
+
+/* Everything else (readout, stick, rack, tray, controls) centred below. */
+#playfield {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: 8px 24px 20px;
+}
+
+#cons-area, #bin-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+#cons-list {
+  display: flex;
+  gap: 8px;
+  min-height: 88px;
+  padding: 8px 10px;
+  align-items: flex-start;
+  background: linear-gradient(180deg, #2b2114 0%, var(--ink-2) 100%);
+  border: 2px solid var(--brass-dark);
+  border-radius: 6px;
+  box-shadow: inset 0 -6px 10px rgba(0, 0, 0, 0.45);
+}
+.cons-icon, .cons-slot-empty {
+  width: 46px;
+  height: 60px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cons-icon {
+  border: 1px solid var(--brass-dark);
+  background: var(--ink-2);
+  cursor: pointer;
+  transition: transform 0.14s ease;
+}
+.cons-icon:hover { transform: scale(1.1) translateY(-2px); z-index: 6; }
+.cons-slot-empty { border: 1px dashed var(--brass-dark); opacity: 0.4; }
 
 /* ---- Sidebar --------------------------------------------------------- */
 
@@ -207,6 +280,8 @@ body {
   border-radius: 6px;
   min-height: 96px;
   box-shadow: inset 0 -6px 10px rgba(0, 0, 0, 0.45);
+  max-width: min(58vw, 640px); /* don't run off-screen — scroll instead */
+  overflow-x: auto;
 }
 
 .shelf-slot {
@@ -753,30 +828,85 @@ body {
   color: var(--press-red);
 }
 
-/* ---- The Foundry (shop) ------------------------------------------------- */
+/* ---- The Foundry (shop) — renders INLINE in the play area --------------- */
+
+/* When shopping, the play elements give way to the shop right in the play
+   area — no overlay, no dimming, no paper card. */
+#playfield.shopping > #readout,
+#playfield.shopping > #stick,
+#playfield.shopping > #rack,
+#playfield.shopping > #bench,
+#playfield.shopping > #hint { display: none; }
 
 #shop {
-  position: fixed;
-  inset: 0;
-  background: rgba(10, 8, 5, 0.85);
+  flex: 1;
+  min-height: 0;
+  width: 100%;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9;
-  padding: 24px;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 4px 20px 18px;
 }
 
 #shop-card {
-  width: min(880px, 100%);
-  max-height: 92vh;
-  overflow-y: auto;
-  background: var(--paper);
-  color: var(--ink);
-  border-radius: 3px;
-  padding: 28px 34px;
-  box-shadow: 0 12px 44px rgba(0, 0, 0, 0.7);
-  border: 1px solid #c9bd9f;
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  color: var(--paper);
 }
+
+/* The sections pull in one after another as the shop opens (only on open —
+   the `opening` class is dropped after, so buying doesn't re-animate). */
+@keyframes shop-slide { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+#shop-card.opening > * { animation: shop-slide 0.32s ease both; }
+#shop-card.opening > *:nth-child(2) { animation-delay: 0.05s; }
+#shop-card.opening > *:nth-child(3) { animation-delay: 0.10s; }
+#shop-card.opening > *:nth-child(4) { animation-delay: 0.15s; }
+#shop-card.opening > *:nth-child(5) { animation-delay: 0.20s; }
+#shop-card.opening > *:nth-child(6) { animation-delay: 0.25s; }
+#shop-card.opening > *:nth-child(n+7) { animation-delay: 0.30s; }
+
+/* Dark theme for the inline shop's own header, sections, and offer cards
+   (scoped to #shop, so the paper-card screens stay light). */
+#shop .shop-h { border-bottom-color: var(--brass-dark); }
+#shop .shop-h h2 { color: var(--paper); }
+#shop .shop-section-title { color: #a1957b; }
+#shop .shop-card { background: var(--ink-2); border-color: var(--brass-dark); color: var(--paper); }
+#shop .shop-card h4 { color: var(--paper); }
+#shop .shop-card .desc { color: var(--paper-dim); }
+#shop .shop-card .flavor { color: #8a7f68; }
+#shop .sold-out { color: var(--paper-dim); }
+
+/* Compact offer tiles: icon + name + cost in a neat row; details on hover,
+   click to reveal BUY (click again to close). */
+#shop .shop-row { gap: 10px; }
+.shop-item {
+  width: 92px;
+  padding: 8px 6px;
+  border: 1px solid var(--brass-dark);
+  border-radius: 4px;
+  background: var(--ink-2);
+  color: var(--paper);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
+}
+.shop-item:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5); }
+.shop-item.menu-selected { transform: translateY(-6px); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6); border-color: var(--copper); }
+.shop-item.blocked { opacity: 0.5; }
+.shop-item .book-icon svg:not(.sticker),
+.shop-item .bag-icon svg,
+.shop-item .slip-icon svg,
+.shop-item .pen-icon svg { width: 34px; height: 42px; }
+.shop-item-name { font-size: 9px; line-height: 1.15; text-align: center; max-width: 88px; }
+.shop-item-cost { font-family: var(--font-display); font-size: 12px; font-weight: 700; color: var(--copper-hot); }
+
+/* A selected shelf Book / consumable / bin Book lifts (its menu is open). */
+.shelf-book.menu-selected { animation: none; transform: scale(1.14) translateY(-6px); position: relative; z-index: 7; }
+.cons-icon.menu-selected { transform: scale(1.12) translateY(-3px); z-index: 6; }
 
 .shop-h {
   display: flex;
@@ -1179,6 +1309,38 @@ body {
 .win-stat i { font-size: 11px; font-style: normal; color: var(--press-red); }
 .win-stat-book { grid-column: 1 / -1; }
 .win-foot { display: flex; justify-content: space-between; gap: 12px; }
+
+/* Card action menu (long-press / right-click on a Book, consumable, or bin). */
+#cardmenu {
+  position: fixed;
+  z-index: 30;
+  min-width: 128px;
+  padding: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid #c9bd9f;
+  border-radius: 4px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cardmenu-title {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  border-bottom: 1px solid #c9bd9f;
+  padding-bottom: 5px;
+  margin-bottom: 2px;
+}
+#cardmenu .btn { width: 100%; }
+
+/* Compact Foundry cards: trim the always-on text so the zones fit without a
+   long scroll — the full flavour still lives on the Book covers / hover. */
+.shop-card { padding: 10px 8px; }
+.shop-card .desc { font-size: 10px; line-height: 1.35; }
+.shop-card .flavor { display: none; }
 
 /* ---- Count-up events: pulses + floating numbers --------------------------- */
 

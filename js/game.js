@@ -62,6 +62,9 @@ class Game {
                                // (drives the win screen's "most valuable Book")
     this.rerollCost = CFG.RESTOCK_COST; // shop-reroll price; climbs per reroll, partly
                                         // persists between shops (see decayRerollCost)
+    this.bin = null;           // a single Book stashed out of play (see binPark);
+    this.binState = null;      // its scaling state + sticker are kept safe with it
+    this.binSticker = null;
     this.stats = {
       wordsForged: 0, bestWord: '—', bestScore: 0,
       bossesBeaten: 0, ticketsEarnedTotal: 0, tilesDestroyed: 0,
@@ -187,6 +190,42 @@ class Game {
     this.rerollCost = this.rerollCost > CFG.RESTOCK_STICKY
       ? Math.max(CFG.RESTOCK_FLOOR, this.rerollCost - CFG.RESTOCK_DECAY)
       : CFG.RESTOCK_COST;
+  }
+
+  // --- The Bin: a one-slot stash for a Book, worked between rounds ----------
+  // Park a shelf Book into the (empty) Bin, keeping its scaling state and
+  // sticker safe; it stops scoring and frees its shelf slot until retrieved.
+  binPark(bookId) {
+    if (this.bin) return false; // one at a time
+    const def = this.books.shelf.find((b) => b.id === bookId);
+    if (!def) return false;
+    this.binState = this.books.state[def.id] || null;
+    this.binSticker = this.books.stickers[def.id] || null;
+    this.books.remove(bookId); // off the shelf (this also drops its state/sticker)
+    this.bin = def;
+    return true;
+  }
+
+  // Bring the stashed Book back onto the shelf (if there's room), restoring
+  // exactly the state and sticker it went in with.
+  binRetrieve() {
+    if (!this.bin || this.books.isFull) return false;
+    const def = this.bin;
+    if (!this.books.add(def)) return false;
+    if (this.binSticker) this.books.stickers[def.id] = this.binSticker;
+    if (this.binState) this.books.state[def.id] = this.binState;
+    this.books.syncHooks(); // the restored sticker may add a word-phase rider
+    this.bin = null; this.binState = null; this.binSticker = null;
+    return true;
+  }
+
+  // Sell a held consumable back — slips refund little (mostly 1 ticket).
+  sellConsumable(index) {
+    const def = this.consumables[index];
+    if (!def) return false;
+    this.consumables.splice(index, 1);
+    this.tickets += Math.max(1, Math.floor((def.cost || 0) * CFG.SELL_FACTOR));
+    return true;
   }
 
   // --- Boss modifiers ---------------------------------------------------
@@ -632,6 +671,9 @@ class Game {
       endless: this.endless,
       bookOutput: this.bookOutput,
       rerollCost: this.rerollCost,
+      bin: this.bin ? this.bin.id : null,
+      binState: this.binState,
+      binSticker: this.binSticker,
       runWords: [...this.runWords],
       runYCount: this.runYCount,
       stats: this.stats,
@@ -668,6 +710,9 @@ class Game {
     this.endless = data.endless || false;
     this.bookOutput = data.bookOutput || {};
     this.rerollCost = data.rerollCost || CFG.RESTOCK_COST;
+    this.bin = data.bin ? (BOOKS.find((b) => b.id === data.bin) || null) : null;
+    this.binState = data.binState || null;
+    this.binSticker = data.binSticker || null;
     this.runWords = new Set(data.runWords || []);
     this.runYCount = data.runYCount || 0;
     this.stats = data.stats || { wordsForged: 0, bestWord: '—', bestScore: 0,
