@@ -56,6 +56,12 @@ class Game {
     this.runWords = new Set(); // every word forged this run (Errata's unlock)
     this.runYCount = 0;        // Y slugs played this run (Quizlet's unlock)
     this.bossesThisRun = 0;    // how deep this run has gone (boss-depth unlocks)
+    this.endless = false;      // set once the WIN_BOSSES-th boss is beaten and the
+                               // player chooses to carry on past the win screen
+    this.bookOutput = {};      // book id -> cumulative raw score it added this run
+                               // (drives the win screen's "most valuable Book")
+    this.rerollCost = CFG.RESTOCK_COST; // shop-reroll price; climbs per reroll, partly
+                                        // persists between shops (see decayRerollCost)
     this.stats = {
       wordsForged: 0, bestWord: '—', bestScore: 0,
       bossesBeaten: 0, ticketsEarnedTotal: 0, tilesDestroyed: 0,
@@ -114,20 +120,25 @@ class Game {
     this.startRound();
   }
 
-  // Score target. Runs in BOSS_EVERY-level sections: within a section the
-  // increment starts at DELTA and grows by DD per round (delta-delta). After
-  // each boss, the next section starts at bossTarget × BOSS_MULT CEILed to a
-  // magnitude that climbs every two sections (10^2, 10^2, 10^3, 10^3, ...),
-  // and DELTA/DD grow by their _GROWTH amounts. The raw sequence is computed
-  // in real numbers; only as a FINAL step is each round's requirement rounded
-  // to the NEAREST magnitude one power below the section's ceil magnitude
-  // (10 for sections 1-2, 100 for 3-4, ...). See CFG.TARGET.
+  // Score target for the current level. Normal play (levels 1 .. BOSS_EVERY ×
+  // WIN_BOSSES) runs the sectioned DELTA/DD curve; beyond the winning boss the
+  // Endless multiplier model takes over. Both round to 2 significant figures.
   get target() {
+    const lastNormal = CFG.BOSS_EVERY * CFG.WIN_BOSSES;
+    return this.level <= lastNormal
+      ? this._normalTarget(this.level)
+      : this._endlessTarget(this.level, lastNormal);
+  }
+
+  // The sectioned raw curve: within a section the increment starts at DELTA and
+  // grows by DD per round; between sections the start is the prior boss target ×
+  // BOSS_MULT, and DELTA/DD grow by their _GROWTH amounts. Difficulty scales the
+  // whole delta system. Rounded to 2 significant figures as the final step.
+  _normalTarget(level) {
     const T = CFG.TARGET;
-    // Difficulty scales the whole delta system; START and rounding are shared.
     const f = CFG.DIFFICULTIES[this.difficulty || 0].mult;
-    const section = Math.floor((this.level - 1) / CFG.BOSS_EVERY); // 0-based
-    const round = (this.level - 1) % CFG.BOSS_EVERY;               // 0-based
+    const section = Math.floor((level - 1) / CFG.BOSS_EVERY); // 0-based
+    const round = (level - 1) % CFG.BOSS_EVERY;               // 0-based
 
     // Walk prior sections in raw space to find this section's start.
     let start = T.START;
@@ -136,15 +147,28 @@ class Game {
       const dd = (T.DD + T.DD_GROWTH * s) * f;
       const n = CFG.BOSS_EVERY - 1;
       const bossRaw = start + n * delta + dd * (n * (n - 1) / 2);
-      const ceilMag = Math.pow(10, 2 + Math.floor(s / 2));
-      start = Math.ceil((bossRaw * T.BOSS_MULT) / ceilMag) * ceilMag;
+      start = bossRaw * T.BOSS_MULT;
     }
 
     const delta = (T.DELTA + T.DELTA_GROWTH * section) * f;
     const dd = (T.DD + T.DD_GROWTH * section) * f;
     const raw = start + round * delta + dd * (round * (round - 1) / 2);
-    const nearMag = Math.pow(10, 1 + Math.floor(section / 2));
-    return Math.round(raw / nearMag) * nearMag;
+    return Util.sig2(raw);
+  }
+
+  // Endless: starting from the winning-boss requirement, each level multiplies
+  // the requirement by a multiplier that itself grows every level (DELTA and DD
+  // gone multiplicative); an Endless boss multiplies by BOSS_BONUS + that
+  // multiplier. Computed fresh from level so it stays a pure getter.
+  _endlessTarget(level, lastNormal) {
+    const E = CFG.ENDLESS;
+    let req = this._normalTarget(lastNormal);
+    let dm = E.DELTA_MULT;
+    for (let L = lastNormal + 1; L <= level; L++) {
+      req *= (L % CFG.BOSS_EVERY === 0) ? (E.BOSS_BONUS + dm) : dm;
+      dm += E.DELTA_MULT_GROWTH;
+    }
+    return Util.sig2(req);
   }
 
   get isBossLevel() {
@@ -154,6 +178,15 @@ class Game {
   // The shop opens after clearing every SHOP_EVERYth level.
   get shopDue() {
     return this.level % CFG.SHOP_EVERY === 0;
+  }
+
+  // Called when a new shop opens: the reroll price relaxes back toward its base,
+  // but a cost that climbed past RESTOCK_STICKY only decays part-way (it stays
+  // elevated), so serial rerollers keep paying a premium for a while.
+  decayRerollCost() {
+    this.rerollCost = this.rerollCost > CFG.RESTOCK_STICKY
+      ? Math.max(CFG.RESTOCK_FLOOR, this.rerollCost - CFG.RESTOCK_DECAY)
+      : CFG.RESTOCK_COST;
   }
 
   // --- Boss modifiers ---------------------------------------------------
@@ -497,6 +530,7 @@ class Game {
       this.stats.bestScore = result.total;
       this.stats.bestWord = result.word;
     }
+    this.creditBooks(result.events); // tally each Book's raw score contribution
 
     // Played slugs go to the hellbox — except one-use variants (Paper) and
     // anything a boss claims (The Crucible), which are destroyed for good.
@@ -539,11 +573,45 @@ class Game {
       this.progress('roundWin',
         { wasBoss: this.isBossLevel, tickets: this.lastTicketsEarned,
           bossId: this.boss ? this.boss.id : null, bossesThisRun: this.bossesThisRun });
+      // Beating the WIN_BOSSES-th boss wins the run (once) — the UI shows the
+      // victory screen instead of the shop / next level. Endless runs past it.
+      if (this.isBossLevel && !this.endless && this.bossesThisRun >= CFG.WIN_BOSSES) {
+        outcome = 'wonGame';
+        this.state = 'gameWon';
+      }
     } else if (this.plays === 0) {
       outcome = 'lost';
       this.state = 'gameOver';
     }
     return { result, outcome };
+  }
+
+  // Attribute each scoring event's marginal effect on the running total
+  // (runP × runM) to whichever Book produced it. Book/sticker events carry
+  // their shelf index `b`; letter events don't, so they're skipped. Summed
+  // across the run this ranks Books by raw score added (see mostEffectiveBook).
+  creditBooks(events) {
+    let prev = 0;
+    for (const e of events) {
+      const product = (e.runP || 0) * (e.runM || 0);
+      const delta = product - prev;
+      prev = product;
+      if (e.b == null) continue; // a letter/tile event, not a Book's doing
+      const book = this.books.shelf[e.b];
+      if (book) this.bookOutput[book.id] = (this.bookOutput[book.id] || 0) + delta;
+    }
+  }
+
+  // The Book that added the most raw score this run, for the victory screen.
+  // Looks up by id against the full catalogue so a sold Book still counts.
+  mostEffectiveBook() {
+    let bestId = null, best = 0;
+    for (const [id, val] of Object.entries(this.bookOutput)) {
+      if (val > best) { best = val; bestId = id; }
+    }
+    if (!bestId) return null;
+    const def = BOOKS.find((b) => b.id === bestId);
+    return def ? { name: def.name, output: Math.round(best) } : null;
   }
 
   // --- Save / resume ----------------------------------------------------
@@ -561,6 +629,9 @@ class Game {
       tickets: this.tickets,
       lastBossId: this.lastBossId,
       bossesThisRun: this.bossesThisRun,
+      endless: this.endless,
+      bookOutput: this.bookOutput,
+      rerollCost: this.rerollCost,
       runWords: [...this.runWords],
       runYCount: this.runYCount,
       stats: this.stats,
@@ -594,6 +665,9 @@ class Game {
     this.tickets = data.tickets || 0;
     this.lastBossId = data.lastBossId || null;
     this.bossesThisRun = data.bossesThisRun || 0;
+    this.endless = data.endless || false;
+    this.bookOutput = data.bookOutput || {};
+    this.rerollCost = data.rerollCost || CFG.RESTOCK_COST;
     this.runWords = new Set(data.runWords || []);
     this.runYCount = data.runYCount || 0;
     this.stats = data.stats || { wordsForged: 0, bestWord: '—', bestScore: 0,
@@ -653,7 +727,9 @@ class Game {
 
   // Snapshot the run (or clear it once the run is over).
   saveRun() {
-    if (this.state === 'gameOver') return this.clearSave();
+    // A finished run (lost or won) has nothing to resume; the victory flow
+    // makes its own Endless save explicitly.
+    if (this.state === 'gameOver' || this.state === 'gameWon') return this.clearSave();
     try {
       localStorage.setItem(CFG.SAVE_KEY, JSON.stringify(this.serialize()));
     } catch (e) { /* storage blocked — no autosave this session */ }
@@ -670,7 +746,9 @@ class Game {
       const raw = localStorage.getItem(CFG.SAVE_KEY);
       if (!raw) return null;
       const data = JSON.parse(raw);
-      return (data && data.v === 1 && data.state !== 'gameOver') ? data : null;
+      const resumable = data && data.v === 1
+        && data.state !== 'gameOver' && data.state !== 'gameWon';
+      return resumable ? data : null;
     } catch (e) {
       return null;
     }

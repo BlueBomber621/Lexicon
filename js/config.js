@@ -43,24 +43,34 @@ const CFG = {
   TEST_COPIES: 3,          // copies of each variant / alteration when testing
 
   // --- Progression ----------------------------------------------------
-  // Targets run in 6-level sections ending on a boss. Within a section the
-  // increment starts at DELTA and grows by DD each round. After each boss the
-  // next section starts at bossTarget × BOSS_MULT, CEILed to a magnitude that
-  // climbs every two sections (100, 100, 1000, 1000, 10k, ...), and DELTA/DD
-  // grow by DELTA_GROWTH/DD_GROWTH. As a FINAL step each round's requirement
-  // is rounded to the NEAREST magnitude one power below the section's
-  // (10 for sections 1-2, 100 for 3-4, ...). Full math in Game.target.
+  // Targets run in BOSS_EVERY-level sections ending on a boss. Within a section
+  // the increment starts at DELTA and grows by DD each round (delta-delta);
+  // after each boss the next section starts at bossTarget × BOSS_MULT and
+  // DELTA/DD grow by their _GROWTH amounts. The whole sequence is computed in
+  // raw reals; as a FINAL step each round's requirement is rounded to 2
+  // significant figures (two leading digits, the rest zeroed). The run is WON
+  // on the WIN_BOSSES-th boss; past that, ENDLESS takes over. See Game.target.
   TARGET: {
     START: 100,        // level 1 goal
     DELTA: 60,         // first increment of section 1
-    DELTA_GROWTH: 40,  // delta increases per section
+    DELTA_GROWTH: 24,  // delta increases per section
     DD: 10,            // delta-delta of section 1
-    DD_GROWTH: 15,     // delta-delta increases per section
-    BOSS_MULT: 1.2,    // next section's start = last boss target × this
+    DD_GROWTH: 9,      // delta-delta increases per section
+    BOSS_MULT: 1.14,   // next section's start = last boss target × this
   },
-  TICKETS_PER_LETTER: 1,    // tickets = longest word length that round × this
-  TICKETS_PER_PLAY_LEFT: 1, // + this for each unused play at round end
+  // Endless mode, after the WIN_BOSSES-th boss. Here DELTA/DD turn
+  // MULTIPLICATIVE: each level the requirement ×= a multiplier that itself
+  // grows every level, and each Endless boss multiplies it by BOSS_BONUS plus
+  // that multiplier. Still 2-sig-figure rounded. See Game._endlessTarget.
+  ENDLESS: {
+    DELTA_MULT: 1.5,        // per-level requirement multiplier at Endless start
+    DELTA_MULT_GROWTH: 0.2, // the multiplier grows by this each Endless level
+    BOSS_BONUS: 10,         // an Endless boss ×= BOSS_BONUS + current multiplier
+  },
+  TICKETS_PER_LETTER: 2,    // tickets = longest word length that round × this
+  TICKETS_PER_PLAY_LEFT: 2, // + this for each unused play at round end
   BOSS_EVERY: 6,            // every 6th level is a boss with a rule modifier
+  WIN_BOSSES: 7,            // beating this many bosses WINS the run; beyond is Endless
   SHOP_EVERY: 2,            // the shop opens after every 2nd level cleared
 
   // Difficulties, named for paper sizes. `mult` scales the target curve's
@@ -97,8 +107,13 @@ const CFG = {
   ACHIEVEMENTS_KEY: 'lexicon-achievements', // localStorage key for earned achievements
   SAVE_KEY: 'lexicon-run', // localStorage key for the in-progress run (Continue Run)
   SELL_FACTOR: 0.5,        // Books sell for cost × this (floored, min 1)
-  RESTOCK_COST: 2,         // reroll the shop's offers
-  MIN_DECK_SIZE: 80,       // Hellbox Purge can't thin the deck below this
+  RESTOCK_COST: 2,         // base cost to reroll the shop's offers (the reset value)
+  RESTOCK_STEP: 1,         // cost climbs by this with each reroll within one shop
+  RESTOCK_STICKY: 5,       // if the cost climbed past this, it won't fully reset next shop...
+  RESTOCK_DECAY: 3,        // ...it drops by this each new shop instead (floored at RESTOCK_FLOOR)
+  RESTOCK_FLOOR: 3,        // the reduced floor a "sticky" reroll cost decays toward
+  DONATED_SOFTCAP: 4,      // past this many donated (slot-free) Books, they spawn far rarer
+  MIN_DECK_SIZE: 50,       // Hellbox Purge can't thin the deck below this
 
   // --- Starting deck --------------------------------------------------
   // 94 tiles: a flatter, moderately vowel-forward distribution (~34% vowels)
