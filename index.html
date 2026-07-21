@@ -747,11 +747,6 @@
         <div id="stat-tickets" class="panel-big">0</div>
       </div>
 
-      <div class="panel">
-        <div class="panel-label">CONSUMABLES</div>
-        <div id="cons-list" class="shelf-list">&mdash;</div>
-      </div>
-
       <div id="sidebar-foot">
         <div id="pool-counts">
           <span title="Tiles left in the bag">CASE <b id="stat-bag">0</b></span>
@@ -764,43 +759,63 @@
       </div>
     </aside>
 
-    <!-- Main table: The Shelf, readout, composing stick, rack, tray, controls. -->
+    <!-- Main table: a pinned top bar (Bin · Shelf · Consumables) over the
+         centred playfield (readout, stick, rack, tray, controls). -->
     <main id="table">
 
-      <!-- The Shelf: your Books in firing order — drag to reorder. -->
-      <div id="shelf-area">
-        <div class="tray-label">THE SHELF <span id="shelf-count">0/5</span> &middot; fires left&rarr;right &middot; drag to reorder</div>
-        <div id="shelf"></div>
-      </div>
-
-      <div id="readout">
-        <div id="ro-word" class="empty">SET TYPE TO FORGE A WORD</div>
-        <div id="ro-math" class="hidden">
-          <span id="ro-points">0</span>
-          <span class="ro-x">&times;</span>
-          <span id="ro-mult">0</span>
-          <span id="ro-eq" class="hidden">= <b id="ro-total">0</b></span>
+      <div id="topbar">
+        <!-- The Bin: a one-slug stash for a Book, only between rounds. -->
+        <div id="bin-area" class="hidden">
+          <div class="tray-label">BIN</div>
+          <div id="bin"></div>
+        </div>
+        <!-- The Shelf: your Books in firing order — drag to reorder. -->
+        <div id="shelf-area">
+          <div class="tray-label">THE SHELF <span id="shelf-count">0/5</span> &middot; fires left&rarr;right &middot; drag to reorder</div>
+          <div id="shelf"></div>
+        </div>
+        <!-- Consumables: your held slips, as icons. -->
+        <div id="cons-area">
+          <div class="tray-label">CONSUMABLES</div>
+          <div id="cons-list"></div>
         </div>
       </div>
 
-      <div id="stick"></div>
-
-      <div id="rack"></div>
-
-      <div id="bench">
-        <div id="tray-area" title="Rerolled slugs go back into the bag; replacements are drawn first">
-          <div class="tray-label">REROLL TRAY</div>
-          <div id="tray"></div>
+      <div id="playfield">
+        <div id="readout">
+          <div id="ro-word" class="empty">SET TYPE TO FORGE A WORD</div>
+          <div id="ro-math" class="hidden">
+            <span id="ro-points">0</span>
+            <span class="ro-x">&times;</span>
+            <span id="ro-mult">0</span>
+            <span id="ro-eq" class="hidden">= <b id="ro-total">0</b></span>
+          </div>
         </div>
-        <div id="controls">
-          <button id="btn-forge" class="btn btn-primary">FORGE</button>
-          <button id="btn-reroll" class="btn">REROLL (3)</button>
-          <button id="btn-shuffle" class="btn" title="Shuffle the rack order — for inspiration">SHUFFLE</button>
-          <button id="btn-clear" class="btn">CLEAR</button>
+
+        <div id="stick"></div>
+
+        <div id="rack"></div>
+
+        <div id="bench">
+          <div id="tray-area" title="Rerolled slugs go back into the bag; replacements are drawn first">
+            <div class="tray-label">REROLL TRAY</div>
+            <div id="tray"></div>
+          </div>
+          <div id="controls">
+            <button id="btn-forge" class="btn btn-primary">FORGE</button>
+            <button id="btn-reroll" class="btn">REROLL (3)</button>
+            <button id="btn-shuffle" class="btn" title="Shuffle the rack order — for inspiration">SHUFFLE</button>
+            <button id="btn-clear" class="btn">CLEAR</button>
+          </div>
+        </div>
+
+        <p id="hint">Click / type = compose &middot; right-click or shift-click = reroll tray (3 fires it) &middot; Space = reroll &middot; Enter = forge</p>
+
+        <!-- The Foundry (shop) renders inline here, in the play area. -->
+        <div id="shop" class="hidden">
+          <div id="shop-card"></div>
         </div>
       </div>
-
-      <p id="hint">Click / type = compose &middot; right-click or shift-click = reroll tray (3 fires it) &middot; Space = reroll &middot; Enter = forge</p>
     </main>
   </div>
 
@@ -813,10 +828,6 @@
     </div>
   </div>
 
-  <!-- The Foundry (shop) — contents rendered by ui.js. -->
-  <div id="shop" class="hidden">
-    <div id="shop-card"></div>
-  </div>
 
   <!-- The Library — the full Book collection, locked covers show their
        unlock condition. Contents rendered by ui.js. -->
@@ -857,6 +868,9 @@
 
   <!-- Custom hover tooltip for slugs & Books (positioned by ui.js). -->
   <div id="hovertip" class="hidden"></div>
+
+  <!-- Card action menu (long-press / right-click): buy, sell, use. -->
+  <div id="cardmenu" class="hidden"></div>
 
   <!-- Reset file: two confirmation steps before anything is erased. -->
   <div id="reset" class="hidden">
