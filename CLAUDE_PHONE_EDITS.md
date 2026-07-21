@@ -188,6 +188,17 @@ it and bump the "through entry NNN".
   14 covers render; no JS errors.
 - **[commit]:** f4ac6aa
 
+### 015 — 2026-07-21 — Spellbook: require a material
+- **File:** `js/scoring.js` (`plainRetrigger` condition), `js/content.js`
+  (Spellbook `desc`)
+- **What:** Spellbook now retriggers only slugs that **have a material (variant)
+  and no text alteration** — not every unaltered slug.
+- **Why:** Clarified spec ("must have material, but no text alteration"). Makes
+  it a materials-yes / alterations-no build-around rather than a blanket
+  retrigger. Verified headless: a woodblock slug retriggers; a plain slug and a
+  material+Red slug do not.
+- **[commit]:** d7bc8c3
+
 <!--
 ENTRY TEMPLATE (copy for each new edit):
 
