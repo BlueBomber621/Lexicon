@@ -9,6 +9,85 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
 ---
 
+## [0.14.0] — 2026-07-21 · Redesigned expansion covers  <sub>git 380c1cd / 2f4d515 · desktop</sub>
+### Changed
+- **Redrawn covers for all 14 expansion Books** — the placeholder text-glyph
+  covers become distinctive, mechanic-driven emblems in the letterpress style
+  (single-colour + `currentColor`, so rarity still tints them): a ligature
+  swash (Digraph), kerning measure-marks, an A→Z staircase (Abecedarian), an
+  awl (The Bodkin), a vowel-locked padlock, a sun-and-moon almanac page, a
+  wax-sealed contract, a clipped coupon, a ringed spell-star, a magazine
+  masthead + bestseller badge, redaction bars (Censored Edition), a shield with
+  a yellow cross (Insurance Form), C/K swap arrows, and a blank sort + coin
+  (Empty Book).
+### Fixed
+- **Expansion covers, boss seals and achievement emblems never rendered.** A
+  stray `</defs></svg>` closed the icon sprite early, orphaning every `<symbol>`
+  after it into the HTML (XHTML) namespace — where `<use>` draws nothing and
+  the child paths are dropped, so those covers showed blank (text only) with no
+  console error. Reuniting the sprite restores all 96 Book covers, the boss
+  seals and the achievement icons. (See the hazard note in `CLAUDE_PHONE_EDITS.md`.)
+
+## [0.13.1] — 2026-07-21 · Spellbook: a material, not a blank  <sub>git d7bc8c3 · PR #6 · phone</sub>
+### Changed
+- **The Spellbook** now retriggers only slugs that have a **material (variant)
+  and no text alteration** — a materials-yes / alterations-no build-around,
+  rather than a blanket retrigger of every unaltered slug.
+
+## [0.13.0] — 2026-07-21 · Expansion set: 14 new Books  <sub>git f4ac6aa · PR #6 · phone</sub>
+### Added
+- **14 new Books** → **96 Books**: **The Digraph** (+points per digraph),
+  **Kerning** (+points per ascending adjacent pair), **Abecedarian** (bonus for
+  a fully alphabetical word), **The Bodkin** (×2 on 8+-point slugs), **The
+  Padlocked Book** (vowel-beside-vowel bonus), **The Almanac** (+mult per
+  distinct word forged this run), **The Business Contract** (Books sell for 0
+  tickets, but it grows +points per sale), **The Coupon Book** (first Foundry
+  purchase each visit is free), **The Spellbook** (materialled slugs
+  retrigger), **The Magazine** (Bestseller Stickers give ×2), **The Censored
+  Edition** (×2 mult, but E scores 0), **The Insurance Form** (last-resort
+  top-up if your final play falls short, then self-destructs), **The Switch**
+  (C↔K reading) and **The Empty Book** (blanks score their stand-in letter).
+- New engine hooks behind them: lifetime `itemsBought` / `heavyLettersPlayed`
+  counters and `buy` / `bag` events; per-run pen and per-round letter tracking;
+  a plain-slug retrigger path; a book-level letter-rule channel; the Coupon
+  free-purchase and Insurance last-resort paths — all folded into save/resume.
+
+## [0.12.0] — 2026-07-21 · Shelf & Foundry UI rework  <sub>git ee04f11 · desktop</sub>
+### Changed
+- **The Book shelf moves into a top bar** (Bin · Shelf · Consumables), and the
+  **Foundry now renders inline** in the play area instead of a dimmed paper
+  overlay. Shop offers are compact icon + name + cost tiles with the
+  description on hover; click a tile to reveal **BUY** (or why it's blocked),
+  click again to close. Click an owned shelf Book to reveal **SELL** (drag
+  still reorders); Consumables get a **USE / SELL** menu.
+### Added
+- **The Bin** — a one-slot Book stash worked between rounds; it keeps the
+  stashed Book's scaling state and sticker, and is serialized for Continue Run.
+
+## [0.11.0] — 2026-07-20 · Win, Endless & a balance pass  <sub>git 01544c8 · desktop</sub>
+### Added
+- **You can win.** Beating the 7th boss wins the run and opens a **victory
+  screen** (run stats + most-valuable Book), with an opt-in **Endless mode**
+  past it that ramps multiplicatively.
+### Changed
+- **Target curve** drops the old power-of-10 snapping for 2-significant-figure
+  rounding, with eased mid-game growth and **doubled ticket income**.
+- **Balance pass** tuned with a headless in-browser simulator (`tools/sim.js`,
+  dev-only) toward ~a 1-in-8 win rate for a decent auto-player on Note: common
+  Books re-slanted by rule specificity (broad = modest, narrow = big), The Book
+  of Finance capped at +10 tickets/round, escalating shop reroll cost, and
+  `MIN_DECK_SIZE` 80 → 50.
+
+## [0.10.0] — 2026-07-20 · Comprehensive dictionary  <sub>git e78bdc0 · desktop</sub>
+### Changed
+- **Replaced the ENABLE1 Scrabble list** (no proper nouns, no modern words)
+  with a rebuild from the dwyl `words_alpha` list plus a 72-word modern
+  supplement: **369,848 words, 2–20 letters** — so JULY, TUESDAY, INTERNET and
+  WEBSITE now validate.
+- **`CFG.MAX_WORD_LEN` 11 → 20**, deliberately decoupled from the 11-slot stick:
+  12–20-letter readings stay reachable only through multi-letter sorts. Word
+  length floored at 2 so single letters aren't valid words.
+
 ## [0.9.1] — 2026-07-19 · Eased word colour  <sub>git af3097a · PR #5 · phone</sub>
 ### Changed
 - The composed word's length colour is now a **continuous, eased RGB ramp**
@@ -218,6 +297,12 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com).
   cycle, the letterpress UI shell, and the signature **scoring-sweep**
   animation.
 
+[0.14.0]: https://github.com/BlueBomber621/Lexicon/commit/380c1cd
+[0.13.1]: https://github.com/BlueBomber621/Lexicon/commit/d7bc8c3
+[0.13.0]: https://github.com/BlueBomber621/Lexicon/commit/f4ac6aa
+[0.12.0]: https://github.com/BlueBomber621/Lexicon/commit/ee04f11
+[0.11.0]: https://github.com/BlueBomber621/Lexicon/commit/01544c8
+[0.10.0]: https://github.com/BlueBomber621/Lexicon/commit/e78bdc0
 [0.9.1]: https://github.com/BlueBomber621/Lexicon/commit/af3097a
 [0.9.0]: https://github.com/BlueBomber621/Lexicon/commit/2291507
 [0.8.1]: https://github.com/BlueBomber621/Lexicon/commit/8101444
