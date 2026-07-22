@@ -91,10 +91,13 @@ class ScoringEngine {
       const step = this.letterPass(ctx, tile, index, bonus);
       const a = ALTERATIONS[tile.alteration];
       // Fuzzy prints twice — as does anything a Book has marked for
-      // retriggering (The Colouring Book's red letters). Muted slugs sit out.
+      // retriggering (The Colouring Book's red letters, The Spellbook's
+      // materialled-but-unaltered slugs). Muted slugs sit out.
       const bookRetrigger = ctx.retriggerAlterations
         && ctx.retriggerAlterations.includes(tile.alteration);
-      if ((a && a.retrigger || bookRetrigger) && !step.mute) {
+      // The Spellbook: a slug with a MATERIAL (variant) but no text alteration.
+      const plainRetrigger = ctx.retriggerPlain && tile.variant && !tile.alteration;
+      if ((a && a.retrigger || bookRetrigger || plainRetrigger) && !step.mute) {
         ctx.events.push({ type: 'copy', target: 'tile', i: index,
           runP: ctx.points, runM: ctx.mult });
         this.letterPass(ctx, tile, index, bonus);

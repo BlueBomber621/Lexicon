@@ -12,8 +12,10 @@ reconcile against the "original."
 - Each entry lists the **file(s) touched**, **what changed**, and **why**.
 - The `[commit]` tag (if present) links the edit to a git commit on this
   branch, so you can `git show` the exact diff on the computer.
-- Once you've reconciled a batch on the computer, delete those entries (or move
-  them under a `## Reconciled` heading) to keep the live list short.
+- Entries under **Pending** (below the ✅ divider) are new since the last
+  computer reconcile. Everything **above** the divider has been pulled to the
+  desktop and acknowledged. When you acknowledge the next batch, move the
+  divider down past it and bump its "through entry NNN" number.
 
 ## Branch
 
@@ -152,6 +154,50 @@ All phone-session work lands on: `claude/file-review-jdleyy`
   grows smoothly with length.
 - **Why:** Requested — "gradually go to each step, not snap." Refines edit 008.
 - **[commit]:** af3097a
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
+## ✅ Acknowledged through entry 013 · reconciled on the computer 2026-07-21
+
+Entries **001–013** above were pulled to the computer and **acknowledged on
+2026-07-21**. Everything below this divider is new phone-session work since the
+last reconcile. When the next batch is acknowledged, move this divider down past
+it and bump the "through entry NNN".
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
+## Pending — new phone edits (since last reconcile)
+
+### 014 — 2026-07-21 — Expansion set: 14 new Books
+- **File:** `js/content.js` (14 `BOOKS` entries), `index.html` (14
+  `#icon-book-*` covers), `js/unlocks.js` (`itemsBought`/`heavyLettersPlayed`
+  counters + `buy` event), `js/game.js` (`runPensUsed`, `roundLetters`,
+  `freePurchase`; forge feeds `heavy`/`multiSorts`/round-letters; Insurance
+  Form payout; save/resume), `js/shop.js` (Coupon free purchase via `spend()`;
+  `buy`/`bag` events; Business Contract ticketless sell + `grow.sell`),
+  `js/scoring.js` (`retriggerPlain`), `js/books.js` (book `letterRule` channel;
+  Magazine Bestseller ×2)
+- **What:** Digraph, Kerning, Abecedarian, The Bodkin, The Padlocked Book, The
+  Almanac, Business Contract, Coupon Book, Spellbook, Magazine, Censored
+  Edition, Insurance Form, The Switch, Empty Book — each with a cover and unlock.
+- **Why:** Requested expansion batch (with your tweaks/renames/unlock conditions).
+  New engine hooks: `buy`/`bag` events + lifetime item counter, per-run pen
+  counter, per-round letter set, plain-slug retrigger, book letter-rule channel,
+  Coupon free-purchase, Insurance last-resort.
+- **Verified:** headless — every mechanic checked through the real engine; all
+  14 covers render; no JS errors.
+- **[commit]:** f4ac6aa
+
+### 015 — 2026-07-21 — Spellbook: require a material
+- **File:** `js/scoring.js` (`plainRetrigger` condition), `js/content.js`
+  (Spellbook `desc`)
+- **What:** Spellbook now retriggers only slugs that **have a material (variant)
+  and no text alteration** — not every unaltered slug.
+- **Why:** Clarified spec ("must have material, but no text alteration"). Makes
+  it a materials-yes / alterations-no build-around rather than a blanket
+  retrigger. Verified headless: a woodblock slug retriggers; a plain slug and a
+  material+Red slug do not.
+- **[commit]:** d7bc8c3
 
 <!--
 ENTRY TEMPLATE (copy for each new edit):

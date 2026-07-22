@@ -636,6 +636,143 @@ const BOOKS = [
     effect: { xMult: (ctx, step, game, state) => state.x },
     unlock: { desc: 'Defeat 3 bosses (lifetime).', event: 'roundWin',
       test: (data, profile) => profile.bossesBeaten >= 3 } },
+
+  // ===== Expansion set ==================================================
+  { id: 'digraph', name: 'The Digraph', rarity: 'uncommon', cost: 5, trigger: 'word',
+    desc: '+6 points for each TH, CH, SH, PH, CK, NG or QU in the word.',
+    flavor: 'Two letters, one sound, double the ink.',
+    effect: { points: (ctx) => {
+      const pairs = ['TH', 'CH', 'SH', 'PH', 'CK', 'NG', 'QU'];
+      let n = 0;
+      for (let i = 0; i < ctx.word.length - 1; i++) {
+        if (pairs.includes(ctx.word.substr(i, 2))) n++;
+      }
+      return 6 * n;
+    } },
+    unlock: { desc: 'Beat the 2nd boss of a run on Letter difficulty or above.',
+      event: 'roundWin',
+      test: (data, profile, game) => data.wasBoss && data.bossesThisRun >= 2 && game.difficulty >= 1 } },
+
+  { id: 'kerning', name: 'Kerning', rarity: 'uncommon', cost: 5, trigger: 'word',
+    desc: '+5 points for each pair of adjacent letters in alphabetical order (AB, ST).',
+    flavor: 'Mind the gap between the letters.',
+    effect: { points: (ctx) => {
+      let n = 0;
+      for (let i = 0; i < ctx.word.length - 1; i++) {
+        if (ctx.word.charCodeAt(i + 1) - ctx.word.charCodeAt(i) === 1) n++;
+      }
+      return 5 * n;
+    } },
+    unlock: { desc: 'Beat the 2nd boss of a run on Letter difficulty or above.',
+      event: 'roundWin',
+      test: (data, profile, game) => data.wasBoss && data.bossesThisRun >= 2 && game.difficulty >= 1 } },
+
+  { id: 'abecedarian', name: 'Abecedarian', rarity: 'rare', cost: 8, trigger: 'word',
+    desc: '+45 points if the whole word runs in alphabetical order.',
+    flavor: 'It learned its letters in order and never forgot.',
+    when: (ctx) => {
+      const w = ctx.word;
+      if (w.length < 3) return false;
+      for (let i = 1; i < w.length; i++) if (w[i] < w[i - 1]) return false;
+      return true;
+    },
+    effect: { points: 45 },
+    unlock: { desc: 'Play at least one of every letter A–Z within a single round.',
+      event: 'forge',
+      test: (data, profile, game) => game.roundLetters && game.roundLetters.size >= 26 } },
+
+  { id: 'bodkin', name: 'The Bodkin', rarity: 'rare', cost: 8, trigger: 'letter',
+    desc: 'Every slug worth 8 or more points scores ×2 mult.',
+    flavor: 'A spike for the heaviest sorts.',
+    when: (ctx, step) => step.tile.value >= 8,
+    effect: { xMult: 2 },
+    unlock: { desc: 'Play 20 slugs worth 8+ points (lifetime).', event: 'forge',
+      test: (data, profile) => profile.heavyLettersPlayed >= 20 } },
+
+  { id: 'padlocked-book', name: 'The Padlocked Book', rarity: 'uncommon', cost: 6, trigger: 'letter',
+    desc: 'A vowel sitting next to another vowel scores +5 extra points.',
+    flavor: 'Two vowels, locked together.',
+    when: (ctx, step) => {
+      if (!Util.spellsAny(step, 'AEIOU')) return false;
+      const t = ctx.tiles, i = step.index;
+      const isV = (tile) => tile && 'AEIOU'.includes(tile.letter);
+      return isV(t[i - 1]) || isV(t[i + 1]);
+    },
+    effect: { points: 5 },
+    unlock: { desc: 'Defeat the 2nd boss of a run.', event: 'roundWin',
+      test: (data) => data.wasBoss && data.bossesThisRun >= 2 } },
+
+  { id: 'almanac', name: 'The Almanac', rarity: 'rare', cost: 8, trigger: 'word',
+    desc: '+1 mult for every distinct word you have forged this run.',
+    flavor: "Every word you've ever set, filed by the day.",
+    effect: { mult: (ctx, step, game) => game.runWords.size },
+    unlock: { desc: 'Beat the 2nd boss of a run on Demy difficulty or above.',
+      event: 'roundWin',
+      test: (data, profile, game) => data.wasBoss && data.bossesThisRun >= 2 && game.difficulty >= 2 } },
+
+  { id: 'business-contract', name: 'The Business Contract', rarity: 'uncommon', cost: 6, trigger: 'word',
+    desc: 'While shelved, selling a Book pays 0 tickets — but this gains +4 points every time you sell one.',
+    flavor: 'Signed in triplicate. Paid in lead, not coin.',
+    initState: { pts: 0 },
+    status: (state) => `+${state.pts} pts`,
+    grow: { sell: (state) => { state.pts += 4; } },
+    effect: { points: (ctx, step, game, state) => state.pts },
+    unlock: { desc: 'Buy 50 items from the Foundry (lifetime).', event: 'buy',
+      test: (data, profile) => profile.itemsBought >= 50 } },
+
+  { id: 'coupon-book', name: 'The Coupon Book', rarity: 'rare', cost: 8, trigger: 'passive',
+    desc: 'Your first purchase in every Foundry visit is free.',
+    flavor: 'Clip along the dotted line. One on the house.',
+    unlock: { desc: 'Buy 100 items from the Foundry (lifetime).', event: 'buy',
+      test: (data, profile) => profile.itemsBought >= 100 } },
+
+  { id: 'spellbook', name: 'The Spellbook', rarity: 'rare', cost: 9, trigger: 'passive',
+    desc: 'Every slug with a material but no text alteration retriggers.',
+    flavor: 'The unmarked sorts know the words by heart.',
+    preScore: (ctx) => { ctx.retriggerPlain = true; },
+    unlock: { desc: 'Beat the 3rd boss of a run on Demy difficulty or above.',
+      event: 'roundWin',
+      test: (data, profile, game) => data.bossesThisRun >= 3 && game.difficulty >= 2 } },
+
+  { id: 'magazine', name: 'The Magazine', rarity: 'rare', cost: 8, trigger: 'passive',
+    desc: 'While shelved, Bestseller Stickers give ×2 mult instead of ×1.5.',
+    flavor: "This week's bestseller, marked up.",
+    preScore: (ctx) => { ctx.bestsellerBoost = true; },
+    unlock: { desc: 'Use 10 pens within a single run.', event: 'pen',
+      test: (data, profile, game) => game.runPensUsed >= 10 } },
+
+  { id: 'censored-edition', name: 'The Censored Edition', rarity: 'rare', cost: 8, trigger: 'word',
+    desc: '×2 mult on every word — but the letter E scores 0 points.',
+    flavor: 'Every E struck through in heavy black.',
+    effect: { xMult: 2 },
+    // Zero E on the silent letter-rule channel (after the slug's own material /
+    // alteration), so an E genuinely scores nothing.
+    letterRule: (ctx, step) => { if (step.tile.letter === 'E') step.pts = 0; },
+    unlock: { desc: 'Beat the 3rd boss of a run using the Archaic Case.',
+      event: 'roundWin',
+      test: (data, profile, game) => data.bossesThisRun >= 3 && game.deckDef.id === 'archaic' } },
+
+  { id: 'insurance-form', name: 'The Insurance Form', rarity: 'rare', cost: 13, trigger: 'passive',
+    desc: 'Costs extra. If your final play still falls short of the goal, it tops you up by 25% of the goal — then is destroyed. Buy it again anytime.',
+    flavor: 'Read the fine print. There is always fine print.',
+    lastResort: { fraction: 0.25 },
+    unlock: { desc: 'Buy 150 items from the Foundry (lifetime).', event: 'buy',
+      test: (data, profile) => profile.itemsBought >= 150 } },
+
+  { id: 'the-switch', name: 'The Switch', rarity: 'uncommon', cost: 5, trigger: 'passive',
+    desc: 'For spelling, any C may be read as a K — and any K as a C.',
+    flavor: 'C or K? The compositor flips a coin.',
+    substitute: { C: ['K'], K: ['C'] },
+    unlock: { desc: 'Buy a Peculiar Case from the Foundry.', event: 'bag',
+      test: (data) => data.bagId === 'peculiars' } },
+
+  { id: 'empty-book', name: 'The Empty Book', rarity: 'uncommon', cost: 6, trigger: 'letter',
+    desc: 'Each blank (_) slug scores the base points of the letter it stands in for.',
+    flavor: 'Blank metal, suddenly worth its weight.',
+    when: (ctx, step) => { const sp = SPECIAL_SLUGS[step.tile.letter]; return !!(sp && sp.wild); },
+    effect: { points: (ctx, step) => CFG.TILE_VALUES[step.spells] || 0 },
+    unlock: { desc: 'Forge a word using 2 or more multi-letter sorts.', event: 'forge',
+      test: (data) => (data.multiSorts || 0) >= 2 } },
 ];
 
 // --- Starting cases (Balatro-style decks) ---------------------------------
