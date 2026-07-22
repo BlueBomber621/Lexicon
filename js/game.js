@@ -55,6 +55,7 @@ class Game {
     this.lastBossId = null;
     this.runWords = new Set(); // every word forged this run (Errata's unlock)
     this.runYCount = 0;        // Y slugs played this run (Quizlet's unlock)
+    this.runPensUsed = 0;      // pens inked this run (The Magazine's unlock)
     this.bossesThisRun = 0;    // how deep this run has gone (boss-depth unlocks)
     this.stats = {
       wordsForged: 0, bestWord: '—', bestScore: 0,
@@ -85,6 +86,8 @@ class Game {
     this.deck.reset(); // every tile back in the bag, fresh shuffle
     this.stick = [];
     this.tray = [];
+    this.roundLetters = new Set(); // distinct letters played this round (Abecedarian)
+    this.freePurchase = false;     // Coupon Book grants its free buy at shop open
     this.handSize = CFG.RACK_SIZE;
     this.plays = CFG.PLAYS_PER_ROUND;
     this.rerolls = CFG.REROLLS_PER_ROUND;
@@ -515,8 +518,28 @@ class Game {
     if (this.boss && this.boss.onDraw) this.boss.onDraw(this, this.bossState); // Foreman demands anew
 
     this.books.dispatchGrow('forge', { word: result.word, total: result.total });
-    this.progress('forge',
-      { word: result.word, total: result.total, mult: result.mult, repeat });
+    // Feed the new unlock conditions: distinct letters this round (Abecedarian),
+    // heavy slugs worth 8+ (The Bodkin), and multi-letter sorts (The Empty Book).
+    for (const c of result.word) this.roundLetters.add(c);
+    const heavy = played.filter((t) => t.value >= 8).length;
+    const multiSorts = played.filter((t) => {
+      const s = slugSpells(t.letter);
+      return s && s.length > 1;
+    }).length;
+    this.progress('forge', { word: result.word, total: result.total,
+      mult: result.mult, repeat, heavy, multiSorts });
+
+    // The Insurance Form: your final play came up short — it tops you up by a
+    // fraction of the goal as a last resort, then burns up (re-buyable).
+    if (this.plays === 0 && this.roundScore < this.target) {
+      const ins = this.books.shelf.find((b) => b.lastResort);
+      if (ins) {
+        const bump = Math.ceil(this.target * ins.lastResort.fraction);
+        this.roundScore += bump;
+        this.books.remove(ins.id);
+        this.note(`${ins.name} tops you up +${Util.fmt(bump)} — and is spent`);
+      }
+    }
 
     let outcome = 'continue';
     if (this.roundScore >= this.target) {
@@ -563,6 +586,7 @@ class Game {
       bossesThisRun: this.bossesThisRun,
       runWords: [...this.runWords],
       runYCount: this.runYCount,
+      runPensUsed: this.runPensUsed,
       stats: this.stats,
       // the whole pool + where each tile currently sits
       tiles: this.deck.all.map((t) => ({ id: t.id, letter: t.letter,
@@ -596,6 +620,9 @@ class Game {
     this.bossesThisRun = data.bossesThisRun || 0;
     this.runWords = new Set(data.runWords || []);
     this.runYCount = data.runYCount || 0;
+    this.runPensUsed = data.runPensUsed || 0;
+    this.roundLetters = new Set(); // ephemeral round tracking; fresh on resume
+    this.freePurchase = false;
     this.stats = data.stats || { wordsForged: 0, bestWord: '—', bestScore: 0,
       bossesBeaten: 0, ticketsEarnedTotal: 0, tilesDestroyed: 0 };
 

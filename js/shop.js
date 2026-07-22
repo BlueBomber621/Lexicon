@@ -12,6 +12,8 @@ class Shop {
   }
 
   open() {
+    // The Coupon Book grants one free purchase per Foundry visit.
+    this.game.freePurchase = this.game.books.owns('coupon-book');
     this.stock();
   }
 
@@ -87,7 +89,18 @@ class Shop {
   }
 
   canAfford(cost) {
-    return this.game.tickets >= cost;
+    return this.game.freePurchase || this.game.tickets >= cost;
+  }
+
+  // Deduct a purchase's cost — unless the Coupon Book's free buy is available,
+  // which this consumes instead.
+  spend(cost) {
+    if (this.game.freePurchase) {
+      this.game.freePurchase = false;
+      this.game.note('Coupon Book — one free purchase!');
+      return;
+    }
+    this.game.tickets -= cost;
   }
 
   // --- Transactions: each returns false with a reason left to the UI ------
@@ -102,8 +115,9 @@ class Shop {
     // Discount Stickers don't survive the sale; every other kind sticks.
     const keep = offer.sticker && !offer.sticker.removedOnBuy ? offer.sticker.id : null;
     if (!this.game.books.add(offer.def, keep)) return false;
-    this.game.tickets -= cost;
+    this.spend(cost);
     this.books.splice(index, 1);
+    this.game.progress('buy', { kind: 'book' });
     return true;
   }
 
@@ -113,8 +127,9 @@ class Shop {
   // finalizePen(tile, pen).
   buyPenPack() {
     if (!this.penPack || !this.canAfford(CFG.PEN_PACK_COST)) return false;
-    this.game.tickets -= CFG.PEN_PACK_COST;
+    this.spend(CFG.PEN_PACK_COST);
     this.penPack = false;
+    this.game.progress('buy', { kind: 'pen' });
     const pool = this.game.deck.all.slice();
     const tiles = [];
     for (let i = 0; i < CFG.PEN_TILE_PULLS && pool.length; i++) {
@@ -137,7 +152,8 @@ class Shop {
   finalizePen(tile, pen) {
     if (pen.alteration) tile.alteration = pen.alteration;
     if (pen.variant) tile.variant = pen.variant;
-    this.game.newUnlocks.push(...this.game.unlocks.notify('pen', { penId: pen.id, tile }));
+    this.game.runPensUsed = (this.game.runPensUsed || 0) + 1;
+    this.game.progress('pen', { penId: pen.id, tile });
   }
 
   // Buy a bag: pay, then roll its `options` candidate tiles — letter from the
@@ -147,7 +163,9 @@ class Shop {
   buyBag(index) {
     const bag = this.bags[index];
     if (!bag || !this.canAfford(bag.cost)) return false;
-    this.game.tickets -= bag.cost;
+    this.spend(bag.cost);
+    this.game.progress('buy', { kind: 'bag' });
+    this.game.progress('bag', { bagId: bag.id }); // The Switch unlocks on Peculiars
 
     const candidates = Array.from({ length: bag.options }, () => {
       const letter = bag.pool[Math.floor(Math.random() * bag.pool.length)];
@@ -180,15 +198,21 @@ class Shop {
     const def = this.consumables[index];
     if (!def || !this.canAfford(def.cost)) return false;
     if (!this.game.addConsumable(def)) return false; // slots full
-    this.game.tickets -= def.cost;
+    this.spend(def.cost);
     this.consumables.splice(index, 1);
+    this.game.progress('buy', { kind: 'consumable' });
     return true;
   }
 
   sellBook(id) {
     const def = this.game.books.remove(id);
     if (!def) return false;
-    this.game.tickets += this.game.books.sellValue(def);
+    // The Business Contract pays sales in points, not tickets: while it's
+    // shelved a sale refunds nothing but grows the Contract instead.
+    if (!this.game.books.owns('business-contract')) {
+      this.game.tickets += this.game.books.sellValue(def);
+    }
+    this.game.books.dispatchGrow('sell', { def });
     return true;
   }
 

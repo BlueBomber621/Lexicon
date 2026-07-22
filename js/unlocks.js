@@ -28,6 +28,8 @@ class Unlocks {
       jesterPenUsed: 0,  // Jester's Pen inkings
       maxDiffBeaten: -1, // highest difficulty index whose boss you've beaten
       stickersSeen: [],  // every sticker kind you've ever owned
+      itemsBought: 0,    // Foundry purchases (Business Contract / Coupon / Insurance)
+      heavyLettersPlayed: 0, // slugs worth 8+ points played (The Bodkin)
     };
   }
 
@@ -83,7 +85,9 @@ class Unlocks {
     if (event === 'forge') {
       p.wordsForged++;
       if (data.word && data.word.length >= 7) p.longWords++;
+      if (data.heavy) p.heavyLettersPlayed += data.heavy;
     }
+    if (event === 'buy') p.itemsBought += 1;
     if (event === 'reroll') p.rerollsUsed++;
     if (event === 'destroy') p.purgedTiles += data.n || 0;
     if (event === 'bagcast') p.styledCast += data.styled || 0;
