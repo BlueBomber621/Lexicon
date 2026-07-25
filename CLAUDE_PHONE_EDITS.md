@@ -199,6 +199,25 @@ it and bump the "through entry NNN".
   material+Red slug do not.
 - **[commit]:** d7bc8c3
 
+### 016 — 2026-07-21 — Skippable stages, side-quests, and the section map
+- **File:** `js/config.js` (`SKIP_ROUND`, `QUEST_ROUND`, `QUEST_BIG_PLAY`),
+  `js/content.js` (`BOONS`, `SIDE_QUESTS`, `QUEST_REWARDS`), `js/game.js`
+  (section helpers, `pickSectionBoss`, `skipLevel`, `addBoon`/`consumeBoons`,
+  quest roll + settle, round tracking, save/resume), `js/shop.js` (boon
+  consumption in `stock`, `consumableCost`/`penCost`, free-offer handling),
+  `js/ui.js` (`renderMap`, `renderQuest`, skip overlay + `onOverlaySecondary`,
+  quest line on the win card, boons in the sidebar, FREE labels),
+  `css/style.css` (map, quest plaque, two-button overlay), `index.html`
+  (map + quest panels, `#ov-btn2`)
+- **What:** Stage 3 of each section can be skipped for a **slip** (a standing
+  boon that auto-fires when it can — slips stack, e.g. free + donated on the
+  same Book). Stage 5 carries an optional **side-quest** (8 tasks × 7 rewards,
+  both shown up front). A **section map** shows all six stages and the boss's
+  seal — bosses are now drawn at the section's first stage so they can be
+  telegraphed.
+- **Why:** Requested. Verified headless end-to-end; no JS errors.
+- **[commit]:** 2f444da
+
 <!--
 ENTRY TEMPLATE (copy for each new edit):
 
