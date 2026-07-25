@@ -105,20 +105,34 @@ class UI {
     const here = g.sectionRound;
     let html = '';
     for (let n = 1; n <= CFG.BOSS_EVERY; n++) {
+      const level = g.section * CFG.BOSS_EVERY + n;
       const isBoss = n === CFG.BOSS_EVERY;
       const isSkip = n === CFG.SKIP_ROUND;
       const isQuest = n === CFG.QUEST_ROUND;
+      const hasShop = level % CFG.SHOP_EVERY === 0; // a Foundry follows this stage
       const kind = isBoss ? 'map-boss' : isSkip ? 'map-skip' : isQuest ? 'map-quest' : '';
       const state = n < here ? 'map-done' : (n === here ? 'map-now' : '');
-      const mark = isBoss && g.sectionBoss
+      const zig = n % 2 ? 'zig-a' : 'zig-b'; // the press steps up and down
+
+      // Above the point: what the stage carries.
+      const flag = isBoss && g.sectionBoss
         ? `<svg viewBox="0 0 48 48"><use href="#${g.sectionBoss.icon}"/></svg>`
-        : isBoss ? '✦' : isSkip ? '⇥' : isQuest ? '★' : '●';
-      const title = isBoss ? (g.sectionBoss ? `Boss — ${g.sectionBoss.name}: ${g.sectionBoss.desc}` : 'Boss')
-        : isSkip ? 'Skippable — wave it off for a slip'
-        : isQuest ? 'Carries a side-quest' : 'A plain stage';
-      html += `<div class="map-node ${kind} ${state}" title="${title}">` +
-        `<span class="map-mark">${mark}</span>` +
-        `<span class="map-num">${g.section * CFG.BOSS_EVERY + n}</span></div>`;
+        : isBoss ? '✦' : isSkip ? '⇥' : isQuest ? '★' : '';
+      // Below it: the Foundry mark.
+      const shop = hasShop
+        ? `<svg viewBox="0 0 24 24"><use href="#icon-map-shop"/></svg>` : '';
+
+      const notes = [];
+      if (isBoss) notes.push(g.sectionBoss ? `Boss — ${g.sectionBoss.name}: ${g.sectionBoss.desc}` : 'Boss');
+      if (isSkip) notes.push('Skippable — wave it off for a slip (and lose the Foundry after it)');
+      if (isQuest) notes.push('Carries a side-quest');
+      if (!notes.length) notes.push('A plain stage');
+      if (hasShop) notes.push('The Foundry opens after it');
+
+      html += `<div class="map-node ${kind} ${state} ${zig}" title="Level ${level} · ${notes.join(' · ')}">` +
+        `<span class="map-flag">${flag}</span>` +
+        `<span class="map-dot">${level}</span>` +
+        `<span class="map-shop">${shop}</span></div>`;
     }
     el.innerHTML = html;
   }
@@ -938,6 +952,7 @@ class UI {
       case 'vowel-slip': return 'The Vowel Slip needs an A or an E in your reroll tray';
       case 'sticker-slip': return 'Every Book on your shelf already wears a sticker';
       case 'typewriter': return 'The Typewriter cannot spell anything from this hand';
+      case 'service-nomination': return 'This level already carries a side-quest';
       default: return 'Cannot use that now';
     }
   }
@@ -1226,9 +1241,11 @@ class UI {
       // take a standing slip that cashes itself in when its moment comes.
       const boon = BOONS.find((b) => b.id === g.skipOffer) || BOONS[0];
       this.els['ov-title'].textContent = 'SKIP THE STAGE?';
+      const losesShop = g.level % CFG.SHOP_EVERY === 0;
       this.els['ov-body'].innerHTML =
         `Level ${g.level} can be waved off. Take the slip and the press stands idle — ` +
-        `you forfeit this level's tickets entirely.` +
+        `you forfeit this level's tickets` +
+        (losesShop ? ' <b>and the Foundry visit that would follow</b>' : '') + '.' +
         `<div class="skip-boon">` +
           `<div class="skip-boon-title">${this.slipArt(boon, 'slip-icon-sm')} ${boon.name}</div>` +
           `<div>${boon.desc}</div>` +

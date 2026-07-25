@@ -1011,6 +1011,17 @@ const CONSUMABLES = [
       return res ? `${res.sticker.name} stuck to ${res.book.name}` : false;
     } },
 
+  { id: 'service-nomination', name: 'Service Nomination', cost: 7, weight: 5,
+    icon: 'icon-slip-nomination',
+    desc: 'Pins a random side-quest — and its reward — onto the level you are on. Needs a level that has none.',
+    use: (game) => {
+      if (game.quest) return false; // this level already carries one
+      game.quest = game.rollQuest();
+      game.questDone = false;
+      const def = game.questDef;
+      return `Nominated — ${def.name}`;
+    } },
+
   { id: 'typewriter', name: 'The Typewriter', cost: 20, weight: 1, rare: true,
     icon: 'icon-slip-typewriter',
     desc: 'Reads every word your hand can spell, picks the highest-scoring one, and sets it on the stick for you.',
