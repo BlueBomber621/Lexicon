@@ -218,6 +218,23 @@ it and bump the "through entry NNN".
 - **Why:** Requested. Verified headless end-to-end; no JS errors.
 - **[commit]:** 2f444da
 
+### 017 — 2026-07-21 — Skip on stage 4, map markers/zig-zag, Service Nomination
+- **File:** `js/config.js` (`SKIP_ROUND` 3→4), `js/ui.js` (`renderMap` rewrite,
+  skip-overlay copy, `slipRefusal`), `css/style.css` (map flag/dot/shop layout,
+  zig-zag), `index.html` (`#icon-map-shop`, `#icon-slip-nomination`, **sprite
+  fix**), `js/content.js` (Service Nomination sundry)
+- **What:** Skip moved to stage 4 so it also costs the Foundry visit after it.
+  Map restructured — flag **above** each point (skip/quest/boss seal), Foundry
+  mark **below** the shop stages, stages zig-zag up and down. New sundry
+  **Service Nomination** (cost 7, weight 5): pins a random side-quest + reward
+  onto a level with none; refuses on one that already has a quest.
+- **⚠ Bug fixed:** a stray `</defs></svg>` (introduced in edit 014) was closing
+  the sprite early, orphaning **every boss seal, all 14 expansion Book covers,
+  and the achievement emblems** outside the SVG — they silently never rendered.
+  Sprite is one well-formed block again; that art is restored.
+- **Why:** Requested. Verified headless; all three suites pass, no JS errors.
+- **[commit]:** 3818dc9
+
 <!--
 ENTRY TEMPLATE (copy for each new edit):
 
