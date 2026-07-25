@@ -56,7 +56,20 @@ const CFG = {
     DD: 10,            // delta-delta of section 1
     DD_GROWTH: 15,     // delta-delta increases per section
     BOSS_MULT: 1.2,    // next section's start = last boss target × this
-    PARSE_DIGITS: 2,   // goals keep this many significant digits
+    // Goals keep this many significant digits (upper kept, rest zeroed). Once
+    // a goal passes PARSE_LATE_ABOVE it switches to PARSE_DIGITS_LATE, so
+    // five-figure goals step in hundreds rather than snapping in thousands —
+    // triggered by SIZE, not by level, since a hard difficulty gets there much
+    // sooner. Endless returns to PARSE_DIGITS: those numbers are enormous and
+    // round is what reads well.
+    PARSE_DIGITS: 2,
+    PARSE_DIGITS_LATE: 3,
+    PARSE_LATE_ABOVE: 10000,
+    // Per-level increments are floored at these multiples of the goal's grain
+    // (the last digit the parse still shows), so a level always moves the
+    // requirement by a decisive amount rather than the bare minimum tick.
+    DELTA_GRAIN_MIN: 2,
+    DD_GRAIN_MIN: 1,
   },
   // Endless mode: after this many bosses (level 42 at BOSS_EVERY 6) each new
   // section multiplies DELTA/DD by another ×10 — crazier and crazier scaling.

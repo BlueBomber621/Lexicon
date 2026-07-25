@@ -30,11 +30,13 @@ const Util = {
     return Math.floor(n / mag) * mag;
   },
 
-  // The magnitude `parse` zeroes away — one step below the number's leading
-  // digit (8700 -> 100). Used as the floor on a target's per-level increment
-  // so every stage always moves the parsed number.
-  grain(n) {
-    return Math.pow(10, Math.max(0, Math.floor(Math.log10(n)) - 1));
+  // The place value of the LAST digit `parse` still shows — the smallest step
+  // a parsed goal can move by (8700 at 2 digits -> 100; at 3 digits -> 10).
+  // Target increments are floored at a multiple of this so every stage moves
+  // the goal by a visible amount.
+  grain(n, digits = 2) {
+    if (!isFinite(n) || n <= 0) return 1;
+    return Math.pow(10, Math.max(0, Math.floor(Math.log10(n)) - (digits - 1)));
   },
 
   // Does the slug at this step spell any letter from `set`? Multi-letter

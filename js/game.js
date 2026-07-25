@@ -225,28 +225,42 @@ class Game {
     const round = (this.level - 1) % CFG.BOSS_EVERY;               // 0-based
 
     // Walk every prior section in raw space to find this section's start: a
-    // section ends on its boss, and the next one opens at that × BOSS_MULT.
+    // section ends on its boss, and the next one opens at that × BOSS_MULT,
+    // parsed at the depth of the section it opens.
     let start = CFG.TARGET.START;
     for (let s = 0; s < section; s++) {
-      start = Util.parse(this.walkSection(start, s, f, CFG.BOSS_EVERY - 1) * CFG.TARGET.BOSS_MULT,
-        CFG.TARGET.PARSE_DIGITS);
+      const raw = this.walkSection(start, s, f, CFG.BOSS_EVERY - 1) * CFG.TARGET.BOSS_MULT;
+      start = Util.parse(raw, Game.parseDigits(raw, s + 1));
     }
-    return Util.parse(this.walkSection(start, section, f, round), CFG.TARGET.PARSE_DIGITS);
+    const raw = this.walkSection(start, section, f, round);
+    return Util.parse(raw, Game.parseDigits(raw, section));
+  }
+
+  // How many significant digits a goal keeps: two while goals are small,
+  // three once they pass PARSE_LATE_ABOVE (by SIZE, not by level — a hard
+  // difficulty reaches five figures far sooner), and back to two in endless,
+  // where goals run to millions and round numbers read better.
+  static parseDigits(goal, section) {
+    const T = CFG.TARGET;
+    if (section >= CFG.ENDLESS_AFTER_BOSS) return T.PARSE_DIGITS;
+    return goal >= T.PARSE_LATE_ABOVE ? T.PARSE_DIGITS_LATE : T.PARSE_DIGITS;
   }
 
   // Step `rounds` levels into a section from its opening goal. Difficulty
   // scales DELTA/DD; endless sections scale them again by a power of ten.
-  // Each step is floored at the running goal's own grain — the magnitude the
-  // parse would zero away — so a level can never ask for the same number as
-  // the one before it, however coarse the goals get.
+  // Both are floored at a multiple of the running goal's GRAIN — the last
+  // digit its parse still shows — so every level moves the requirement by a
+  // decisive amount, however large the goals get.
   walkSection(start, section, f, rounds) {
     const T = CFG.TARGET;
     const m = Game.endlessMag(section);
-    const delta = (T.DELTA + T.DELTA_GROWTH * section) * f * m;
-    const dd = (T.DD + T.DD_GROWTH * section) * f * m;
+    const baseDelta = (T.DELTA + T.DELTA_GROWTH * section) * f * m;
+    const baseDd = (T.DD + T.DD_GROWTH * section) * f * m;
     let goal = start;
     for (let r = 1; r <= rounds; r++) {
-      goal += Math.max(delta + dd * (r - 1), Util.grain(goal));
+      const g = Util.grain(goal, Game.parseDigits(goal, section));
+      goal += Math.max(baseDelta, g * T.DELTA_GRAIN_MIN)
+        + Math.max(baseDd, g * T.DD_GRAIN_MIN) * (r - 1);
     }
     return goal;
   }
