@@ -235,6 +235,25 @@ it and bump the "through entry NNN".
 - **Why:** Requested. Verified headless; all three suites pass, no JS errors.
 - **[commit]:** 3818dc9
 
+### 018 — 2026-07-21 — Target curve: parse-2, endless mode, softer difficulty mults
+- **File:** `js/util.js` (`parse`, `grain`), `js/config.js` (`PARSE_DIGITS`,
+  `ENDLESS_AFTER_BOSS`, DIFFICULTIES mults), `js/game.js` (`target` rewritten,
+  `walkSection`, `endlessMag`, `isEndless`)
+- **What:** Removed the two-magnitude ladder (`ceilMag`/`nearMag`). One rule now:
+  goals are **parsed to 2 significant digits**. Each level's increment is
+  **floored at the running goal's grain** so the number always moves. Endless
+  mode after the **7th boss (level 42)**: every further section ×10s DELTA/DD.
+  Difficulty mults softened **1/1.5/2.5/4/8 → 1/1.5/2/3/5**.
+- **⚠ Bug fixed:** the old rounding produced **identical targets on consecutive
+  levels** (Note 25/26, 27/28, 28/29, 31/32, 33/34, 35/36; Royal 19, 25), and
+  post-boss jumps overshot BOSS_MULT badly (+43% at L18→19, +122% at L30→31).
+  Now +17–27% everywhere, zero flat spots, strictly increasing.
+- **Why:** Requested. Boss-level goals drop ~0% (Note) to ~40% (Imperial) — the
+  slack is meant for per-difficulty rule modifiers next.
+- **Verified:** live engine matches an independent model of the formula EXACTLY
+  across all 5 difficulties, levels 1–72; all gameplay suites pass; no JS errors.
+- **[commit]:** 9595429
+
 <!--
 ENTRY TEMPLATE (copy for each new edit):
 
