@@ -60,6 +60,12 @@ const CFG = {
   BOSS_EVERY: 6,            // every 6th level is a boss with a rule modifier
   SHOP_EVERY: 2,            // the shop opens after every 2nd level cleared
 
+  // Within each 6-level section, two stages are special (1-based positions):
+  SKIP_ROUND: 3,   // stage 3 offers to be skipped in exchange for a slip (boon)
+  QUEST_ROUND: 5,  // stage 5 carries an optional side-quest with a reward
+  // A "score X in one play" quest asks for this fraction of the level's target.
+  QUEST_BIG_PLAY: 0.6,
+
   // Difficulties, named for paper sizes. `mult` scales the target curve's
   // DELTA / DD (and their growths); START and the rounding rules are shared.
   // Imperial draws from BOSSES_IMPERIAL when that pool has entries.

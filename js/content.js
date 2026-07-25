@@ -1246,3 +1246,162 @@ const ACHIEVEMENTS = [
     desc: 'Forge 100 words (lifetime).', event: 'forge',
     test: (d, game) => game.unlocks.profile.wordsForged >= 100 },
 ];
+
+// --- Boons (the slips you take instead of running a stage) -----------------
+// Skipping stage CFG.SKIP_ROUND of a section forfeits its tickets and score
+// but hands you one of these. A boon is a STANDING promise: it sits in
+// game.boons until its moment comes, then fires itself.
+//   moment 'shop' — applied while the Foundry stocks (gets the shop).
+//   moment 'any'  — tried at every round start until it takes.
+//   apply(game, shop) => true when it has been spent, false to keep waiting.
+// They stack: two shop boons roll their targets independently, so a Donation
+// Slip and a Comp Copy can land on the SAME offer — a free donated Book.
+
+const BOONS = [
+  { id: 'donated-offer', name: 'Donation Slip', icon: 'icon-slip-sticker',
+    desc: 'The next Foundry stocks a Book wearing a Donated Sticker.',
+    moment: 'shop',
+    apply: (game, shop) => {
+      if (shop.books.length === 0) return false;
+      shop.books[Math.floor(Math.random() * shop.books.length)].sticker = STICKERS.donated;
+      return true;
+    } },
+
+  { id: 'free-book', name: 'Comp Copy Slip', icon: 'icon-slip-sticker',
+    desc: 'One Book in the next Foundry is free.',
+    moment: 'shop',
+    apply: (game, shop) => {
+      if (shop.books.length === 0) return false;
+      shop.books[Math.floor(Math.random() * shop.books.length)].free = true;
+      return true;
+    } },
+
+  { id: 'extra-book', name: 'Extra Print Run', icon: 'icon-slip-overtime',
+    desc: 'The next Foundry stocks one extra Book.',
+    moment: 'shop',
+    apply: (game, shop) => { shop.books.push(...shop.pickBooks(1)); return true; } },
+
+  { id: 'free-slip', name: 'Sundry Voucher', icon: 'icon-slip-ink',
+    desc: 'One sundry in the next Foundry is free.',
+    moment: 'shop',
+    apply: (game, shop) => {
+      if (shop.consumables.length === 0) return false;
+      shop.freeConsumable = Math.floor(Math.random() * shop.consumables.length);
+      return true;
+    } },
+
+  { id: 'free-pen', name: 'Ink Requisition', icon: 'icon-pen',
+    desc: "The next Foundry's pen pack is free.",
+    moment: 'shop',
+    apply: (game, shop) => { shop.freePen = true; return true; } },
+
+  { id: 'sticker-now', name: 'Sticker Sheet', icon: 'icon-slip-sticker',
+    desc: 'Slaps a random sticker on a Book that has none — as soon as one can take it.',
+    moment: 'any',
+    apply: (game) => {
+      const res = game.books.stickRandom();
+      if (!res) return false; // no bare Book yet — keep waiting
+      game.note(`${res.sticker.name} stuck to ${res.book.name}`);
+      return true;
+    } },
+
+  { id: 'purse', name: "Printer's Purse", icon: 'icon-slip-purge',
+    desc: '+8 tickets, straight away.',
+    moment: 'any',
+    apply: (game) => { game.tickets += 8; game.note('Purse — +8 tickets'); return true; } },
+];
+
+// --- Side-quest rewards ----------------------------------------------------
+// Paired with a quest at round start; the pairing is shown BEFORE you play so
+// the task and its prize are both known up front.
+
+const QUEST_REWARDS = [
+  { id: 'tickets', desc: '+12 tickets',
+    grant: (game) => { game.tickets += 12; return '+12 tickets'; } },
+
+  { id: 'big-tickets', desc: '+20 tickets',
+    grant: (game) => { game.tickets += 20; return '+20 tickets'; } },
+
+  { id: 'sundry', desc: 'a random sundry',
+    grant: (game) => {
+      const pool = CONSUMABLES.filter((c) => !c.rare);
+      const pick = pool[Math.floor(Math.random() * pool.length)];
+      if (!game.addConsumable(pick)) { game.tickets += 6; return 'pockets full — +6 tickets'; }
+      return `${pick.name} pocketed`;
+    } },
+
+  { id: 'ink-three', desc: '3 slugs inked with a text alteration',
+    grant: (game) => {
+      const pool = game.deck.all.filter((t) => !t.alteration);
+      let n = 0;
+      for (let i = 0; i < 3 && pool.length; i++) {
+        const t = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+        t.alteration = Util.randomKey(ALTERATIONS, true);
+        n++;
+      }
+      return n ? `${n} slug${n > 1 ? 's' : ''} inked` : 'every slug is already inked';
+    } },
+
+  { id: 'cast-three', desc: '3 slugs recast in a material',
+    grant: (game) => {
+      const pool = game.deck.all.filter((t) => !t.variant);
+      let n = 0;
+      for (let i = 0; i < 3 && pool.length; i++) {
+        const t = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+        t.variant = Util.randomKey(VARIANTS, true);
+        n++;
+      }
+      return n ? `${n} slug${n > 1 ? 's' : ''} recast` : 'every slug is already cast';
+    } },
+
+  { id: 'sticker', desc: 'a random sticker on a Book',
+    grant: (game) => {
+      const res = game.books.stickRandom();
+      if (!res) { game.tickets += 6; return 'no bare Book — +6 tickets'; }
+      return `${res.sticker.name} stuck to ${res.book.name}`;
+    } },
+
+  { id: 'slip', desc: 'a random slip',
+    grant: (game) => {
+      const b = BOONS[Math.floor(Math.random() * BOONS.length)];
+      game.addBoon(b.id);
+      return `${b.name} taken`;
+    } },
+];
+
+// --- Side quests -----------------------------------------------------------
+// Stage CFG.QUEST_ROUND of each section carries one of these. Purely optional:
+// failing it costs nothing but the prize. `check(game)` runs when the level is
+// cleared; `desc(game)` may read the target so numbers scale with the level.
+
+const SIDE_QUESTS = [
+  { id: 'no-a', name: 'Dry Spell', desc: () => 'Clear the level without playing a single A.',
+    check: (game) => !game.roundLetters.has('A') },
+
+  { id: 'no-e', name: 'The Censor Approves',
+    desc: () => 'Clear the level without playing a single E.',
+    check: (game) => !game.roundLetters.has('E') },
+
+  { id: 'big-play', name: 'One Big Impression',
+    desc: (game) => `Score ${Util.fmt(game.questThreshold())} or more with a single word.`,
+    check: (game) => game.roundBestPlay >= game.questThreshold() },
+
+  { id: 'long-word', name: 'The Long Measure',
+    desc: () => 'Forge a word of 7 or more letters.',
+    check: (game) => game.roundLongest >= 7 },
+
+  { id: 'terse', name: 'Terse', desc: () => 'Clear the level in 2 words or fewer.',
+    check: (game) => game.wordsThisRound <= 2 },
+
+  { id: 'steady', name: 'Steady Hand',
+    desc: () => 'Clear the level without firing the reroll tray.',
+    check: (game) => game.roundRerollsFired === 0 },
+
+  { id: 'broad', name: 'Broad Sweep',
+    desc: () => 'Play 15 or more distinct letters this level.',
+    check: (game) => game.roundLetters.size >= 15 },
+
+  { id: 'in-hand', name: 'Money in Hand',
+    desc: () => 'Clear the level with at least one play unused.',
+    check: (game) => game.plays >= 1 },
+];

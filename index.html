@@ -766,6 +766,21 @@
         <div class="panel-sub">TARGET <span id="stat-target">300</span></div>
       </div>
 
+      <!-- The section map: the six stages of this run of the press, with the
+           boss's seal waiting at the end. Rendered by ui.js. -->
+      <div class="panel" id="map-panel">
+        <div class="panel-label">THE SECTION</div>
+        <div id="section-map"></div>
+      </div>
+
+      <!-- Side-quest plaque (stage 5 of a section). Rendered by ui.js. -->
+      <div id="quest-panel" class="panel quest hidden">
+        <div class="panel-label quest-label">SIDE-QUEST</div>
+        <div id="quest-name" class="quest-name"></div>
+        <div id="quest-desc" class="panel-sub"></div>
+        <div id="quest-reward" class="quest-reward"></div>
+      </div>
+
       <div id="boss-panel" class="panel boss hidden">
         <div class="panel-label red">BOSS</div>
         <div id="boss-row">
@@ -861,7 +876,10 @@
     <div id="overlay-card">
       <h2 id="ov-title"></h2>
       <div id="ov-body"></div>
-      <button id="ov-btn" class="btn btn-primary"></button>
+      <div class="ov-buttons">
+        <button id="ov-btn2" class="btn hidden"></button>
+        <button id="ov-btn" class="btn btn-primary"></button>
+      </div>
     </div>
   </div>
 

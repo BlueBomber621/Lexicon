@@ -52,6 +52,8 @@ class Game {
     this.tickets = (this.deckDef.mods && this.deckDef.mods.startTickets) || 0;
     this.books.clear();
     this.consumables = [];
+    this.boons = [];           // standing slips waiting for their moment
+    this.sectionBoss = null;   // this section's boss, known from its first stage
     this.lastBossId = null;
     this.runWords = new Set(); // every word forged this run (Errata's unlock)
     this.runYCount = 0;        // Y slugs played this run (Quizlet's unlock)
@@ -83,11 +85,24 @@ class Game {
 
   startRound() {
     this.clearBoss();
+    // Each section's boss is drawn at its FIRST stage, so the section map can
+    // telegraph which seal is waiting at the end of it.
+    if (this.sectionRound === 1 || !this.sectionBoss) this.pickSectionBoss();
     this.deck.reset(); // every tile back in the bag, fresh shuffle
     this.stick = [];
     this.tray = [];
     this.roundLetters = new Set(); // distinct letters played this round (Abecedarian)
+    this.roundBestPlay = 0;        // best single word this round (side-quests)
+    this.roundRerollsFired = 0;    // reroll trays fired this round (side-quests)
     this.freePurchase = false;     // Coupon Book grants its free buy at shop open
+    // Stage QUEST_ROUND of a section carries an optional side-quest; the task
+    // and its prize are both drawn now so the UI can show them up front.
+    this.quest = this.isQuestLevel ? this.rollQuest() : null;
+    this.questDone = false;
+    // Stage SKIP_ROUND may be waved off for a slip — rolled now so the offer
+    // can name exactly what you'd be taking.
+    this.skipOffer = this.isSkipLevel
+      ? BOONS[Math.floor(Math.random() * BOONS.length)].id : null;
     this.handSize = CFG.RACK_SIZE;
     this.plays = CFG.PLAYS_PER_ROUND;
     this.rerolls = CFG.REROLLS_PER_ROUND;
@@ -109,12 +124,91 @@ class Game {
     this.books.onRoundStart();              // roundStart Books apply last
     this.plays = Math.max(1, this.plays);   // Incunabula etc. can't zero you out
     this.rerolls = Math.max(0, this.rerolls);
+    this.consumeBoons('any');               // standing slips fire when they can
     this.state = 'playing'; // 'playing' | 'roundWon' | 'gameOver'
   }
 
   nextLevel() {
     this.level++;
     this.startRound();
+  }
+
+  // --- Sections, skips, and side-quests ---------------------------------
+
+  // Position within the current 6-level section, 1-based (1..BOSS_EVERY).
+  get sectionRound() {
+    return ((this.level - 1) % CFG.BOSS_EVERY) + 1;
+  }
+
+  // 0-based index of the section the run is in.
+  get section() {
+    return Math.floor((this.level - 1) / CFG.BOSS_EVERY);
+  }
+
+  get isSkipLevel() {
+    return this.sectionRound === CFG.SKIP_ROUND;
+  }
+
+  get isQuestLevel() {
+    return this.sectionRound === CFG.QUEST_ROUND;
+  }
+
+  // Draw this section's boss up front (no immediate repeat), so the map can
+  // show its seal from the section's first stage.
+  pickSectionBoss() {
+    const roster = (this.difficulty === 4 && BOSSES_IMPERIAL.length > 0)
+      ? BOSSES_IMPERIAL : BOSSES;
+    const noRepeat = roster.filter((b) => b.id !== this.lastBossId);
+    const pool = noRepeat.length ? noRepeat : roster;
+    this.sectionBoss = pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  // The score a "big play" quest asks for: a share of this level's target.
+  questThreshold() {
+    return Math.ceil(this.target * CFG.QUEST_BIG_PLAY);
+  }
+
+  // Pair a random task with a random prize for a quest level.
+  rollQuest() {
+    const def = SIDE_QUESTS[Math.floor(Math.random() * SIDE_QUESTS.length)];
+    const reward = QUEST_REWARDS[Math.floor(Math.random() * QUEST_REWARDS.length)];
+    return { id: def.id, rewardId: reward.id };
+  }
+
+  get questDef() {
+    return this.quest ? SIDE_QUESTS.find((q) => q.id === this.quest.id) : null;
+  }
+
+  get questReward() {
+    return this.quest ? QUEST_REWARDS.find((r) => r.id === this.quest.rewardId) : null;
+  }
+
+  // Skip a skippable stage: no tickets, no score, the level simply passes —
+  // and you take a slip in exchange. Returns the boon def taken, or null.
+  skipLevel() {
+    if (!this.isSkipLevel || this.state !== 'playing') return null;
+    const def = BOONS.find((b) => b.id === this.skipOffer) || BOONS[0];
+    this.addBoon(def.id);
+    this.nextLevel();
+    return def;
+  }
+
+  // --- Boons (standing slips) -------------------------------------------
+
+  addBoon(id) {
+    this.boons.push(id);
+    // 'any' boons try to land the moment they're taken.
+    this.consumeBoons('any');
+  }
+
+  // Fire every queued boon whose moment has come. A boon that can't land yet
+  // (a Sticker Sheet with no bare Book) returns false and stays queued.
+  consumeBoons(moment, shop = null) {
+    this.boons = this.boons.filter((id) => {
+      const def = BOONS.find((b) => b.id === id);
+      if (!def || def.moment !== moment) return true; // not its moment — keep
+      return !def.apply(this, shop); // applied → drop it; refused → keep
+    });
   }
 
   // Score target. Runs in BOSS_EVERY-level sections: within a section the
@@ -162,12 +256,9 @@ class Game {
   // --- Boss modifiers ---------------------------------------------------
 
   applyBoss() {
-    // Imperial difficulty draws its own boss pool once it has entries.
-    const roster = (this.difficulty === 4 && BOSSES_IMPERIAL.length > 0)
-      ? BOSSES_IMPERIAL : BOSSES;
-    const noRepeat = roster.filter((b) => b.id !== this.lastBossId);
-    const pool = noRepeat.length ? noRepeat : roster;
-    this.boss = pool[Math.floor(Math.random() * pool.length)];
+    // The boss was drawn when the section began (so the map could show it).
+    if (!this.sectionBoss) this.pickSectionBoss();
+    this.boss = this.sectionBoss;
     this.lastBossId = this.boss.id;
     this.bossState = {}; // per-round boss scratch (cursed spots, demanded tile, ...)
     this.bossUnregs = [];
@@ -352,6 +443,7 @@ class Game {
     if (this.rerolls <= 0 || this.tray.length === 0) return false;
     const returned = this.tray.splice(0);
     this.roundRerolledA += returned.filter((t) => t.letter === 'A').length;
+    this.roundRerollsFired = (this.roundRerollsFired || 0) + 1; // Steady Hand quest
     this.rack.push(...this.deck.draw(returned.length));
     this.deck.toBag(returned);
     this.rerolls--;
@@ -488,6 +580,7 @@ class Game {
     this.plays--;
     this.roundScore += result.total;
     this.roundLongest = Math.max(this.roundLongest, result.word.length);
+    this.roundBestPlay = Math.max(this.roundBestPlay, result.total); // side-quests
 
     const repeat = this.runWords.has(result.word); // Errata's unlock condition
     this.runWords.add(result.word);
@@ -556,6 +649,22 @@ class Game {
       ];
       this.tickets += this.lastPayout[0].amount + this.lastPayout[1].amount;
       this.lastPayout.push(...this.books.onRoundWin()); // Books itemise themselves
+      // Side-quest settle-up: check the task, grant the prize. A prize that
+      // pays tickets is itemised alongside everything else.
+      this.questResult = null;
+      if (this.quest && this.questDef) {
+        const def = this.questDef, reward = this.questReward;
+        this.questDone = !!def.check(this);
+        if (this.questDone && reward) {
+          const before = this.tickets;
+          const msg = reward.grant(this);
+          const delta = this.tickets - before;
+          if (delta > 0) this.lastPayout.push({ label: `Side-quest — ${def.name}`, amount: delta });
+          this.questResult = { passed: true, name: def.name, msg };
+        } else {
+          this.questResult = { passed: false, name: def.name, msg: reward ? reward.desc : '' };
+        }
+      }
       this.lastTicketsEarned = this.lastPayout.reduce((sum, p) => sum + p.amount, 0);
       this.stats.ticketsEarnedTotal += this.lastTicketsEarned;
       this.books.dispatchGrow('roundWin', { wasBoss: this.isBossLevel }); // First Edition appreciates
@@ -583,6 +692,9 @@ class Game {
       deckId: this.deckDef.id,
       tickets: this.tickets,
       lastBossId: this.lastBossId,
+      sectionBossId: this.sectionBoss ? this.sectionBoss.id : null,
+      boons: this.boons,
+      quest: this.quest, questDone: this.questDone, skipOffer: this.skipOffer,
       bossesThisRun: this.bossesThisRun,
       runWords: [...this.runWords],
       runYCount: this.runYCount,
@@ -617,11 +729,22 @@ class Game {
     this.level = data.level;
     this.tickets = data.tickets || 0;
     this.lastBossId = data.lastBossId || null;
+    this.sectionBoss = data.sectionBossId
+      ? (BOSSES.find((b) => b.id === data.sectionBossId)
+        || BOSSES_IMPERIAL.find((b) => b.id === data.sectionBossId) || null)
+      : null;
+    this.boons = data.boons || [];
+    this.quest = data.quest || null;
+    this.questDone = !!data.questDone;
+    this.skipOffer = data.skipOffer || null;
+    this.questResult = null;
     this.bossesThisRun = data.bossesThisRun || 0;
     this.runWords = new Set(data.runWords || []);
     this.runYCount = data.runYCount || 0;
     this.runPensUsed = data.runPensUsed || 0;
     this.roundLetters = new Set(); // ephemeral round tracking; fresh on resume
+    this.roundBestPlay = 0;
+    this.roundRerollsFired = 0;
     this.freePurchase = false;
     this.stats = data.stats || { wordsForged: 0, bestWord: '—', bestScore: 0,
       bossesBeaten: 0, ticketsEarnedTotal: 0, tilesDestroyed: 0 };

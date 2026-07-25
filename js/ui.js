@@ -19,6 +19,8 @@ class UI {
       'stat-level', 'stat-target', 'stat-score', 'stat-plays', 'stat-rerolls',
       'stat-tickets', 'stat-bag', 'stat-discard', 'target-fill', 'stat-difficulty',
       'boss-panel', 'boss-name', 'boss-desc', 'boss-seal',
+      'section-map', 'quest-panel', 'quest-name', 'quest-desc', 'quest-reward',
+      'ov-btn2',
       'shelf', 'shelf-count', 'cons-list',
       'penpick', 'penpick-card',
       'ro-word', 'ro-math', 'ro-points', 'ro-mult', 'ro-eq', 'ro-total',
@@ -44,6 +46,7 @@ class UI {
     this.els['btn-shuffle'].addEventListener('click', () => this.onShuffle());
     this.els['btn-clear'].addEventListener('click', () => this.onClear());
     this.els['ov-btn'].addEventListener('click', () => this.onOverlayButton());
+    this.els['ov-btn2'].addEventListener('click', () => this.onOverlaySecondary());
     this.els['btn-mute'].addEventListener('click', () => this.onMute());
     this.els['btn-library'].addEventListener('click', () => this.toggleLibrary());
     this.els['library-card'].addEventListener('click', (e) => {
@@ -87,7 +90,52 @@ class UI {
     this.renderReadout();
     this.renderControls();
     this.renderShelf();
+    this.renderMap();
+    this.renderQuest();
     this.announceUnlocks();
+  }
+
+  // The section map: the six stages of this run of the press. Skip stages,
+  // the side-quest stage, and the boss (with its seal) are all telegraphed,
+  // cleared stages dim, and the live one is ringed.
+  renderMap() {
+    const g = this.game;
+    const el = this.els['section-map'];
+    if (!el) return;
+    const here = g.sectionRound;
+    let html = '';
+    for (let n = 1; n <= CFG.BOSS_EVERY; n++) {
+      const isBoss = n === CFG.BOSS_EVERY;
+      const isSkip = n === CFG.SKIP_ROUND;
+      const isQuest = n === CFG.QUEST_ROUND;
+      const kind = isBoss ? 'map-boss' : isSkip ? 'map-skip' : isQuest ? 'map-quest' : '';
+      const state = n < here ? 'map-done' : (n === here ? 'map-now' : '');
+      const mark = isBoss && g.sectionBoss
+        ? `<svg viewBox="0 0 48 48"><use href="#${g.sectionBoss.icon}"/></svg>`
+        : isBoss ? '✦' : isSkip ? '⇥' : isQuest ? '★' : '●';
+      const title = isBoss ? (g.sectionBoss ? `Boss — ${g.sectionBoss.name}: ${g.sectionBoss.desc}` : 'Boss')
+        : isSkip ? 'Skippable — wave it off for a slip'
+        : isQuest ? 'Carries a side-quest' : 'A plain stage';
+      html += `<div class="map-node ${kind} ${state}" title="${title}">` +
+        `<span class="map-mark">${mark}</span>` +
+        `<span class="map-num">${g.section * CFG.BOSS_EVERY + n}</span></div>`;
+    }
+    el.innerHTML = html;
+  }
+
+  // The side-quest plaque — task and prize, both known before you play.
+  renderQuest() {
+    const g = this.game;
+    const panel = this.els['quest-panel'];
+    if (!panel) return;
+    const def = g.questDef, reward = g.questReward;
+    panel.classList.toggle('hidden', !def);
+    if (!def) return;
+    panel.classList.toggle('quest-done', !!g.questDone);
+    this.els['quest-name'].textContent = def.name;
+    this.els['quest-desc'].textContent = def.desc(g);
+    this.els['quest-reward'].textContent =
+      (g.questDone ? '✓ EARNED — ' : 'REWARD: ') + (reward ? reward.desc : '');
   }
 
   // Drain the game's unlock queue into toasts + a fanfare. Plain notes
@@ -569,12 +617,18 @@ class UI {
       shelfEl.appendChild(slot);
     }
 
-    this.els['cons-list'].innerHTML = g.consumables.length === 0 ? '&mdash;'
-      : g.consumables.map((c, i) =>
-          `<div class="shelf-row" title="${c.name} — ${c.desc}">` +
-          `${this.slipArt(c, 'slip-icon-sm')} ${c.name}` +
-          `<button class="btn btn-tiny" data-use="${i}">USE</button></div>`
-        ).join('');
+    // Held sundries, then any standing slips (boons) waiting to cash in.
+    const consRows = g.consumables.map((c, i) =>
+      `<div class="shelf-row" title="${c.name} — ${c.desc}">` +
+      `${this.slipArt(c, 'slip-icon-sm')} ${c.name}` +
+      `<button class="btn btn-tiny" data-use="${i}">USE</button></div>`).join('');
+    const boonRows = (g.boons || []).map((id) => {
+      const b = BOONS.find((x) => x.id === id);
+      return b ? `<div class="boon-row" title="${b.desc}">` +
+        `${this.slipArt(b, 'slip-icon-sm')} ${b.name}</div>` : '';
+    }).join('');
+    this.els['cons-list'].innerHTML =
+      (consRows || boonRows) ? consRows + boonRows : '&mdash;';
 
     this.els['btn-library'].textContent =
       `LIBRARY ${g.unlocks.unlockedCount}/${BOOKS.length}`;
@@ -1154,18 +1208,58 @@ class UI {
 
   // --- Overlay (round end / game over) -------------------------------------
 
+  // If the freshly-started level is a skippable stage, put the offer up.
+  maybeOfferSkip() {
+    const g = this.game;
+    // Only before you've committed a word — resuming mid-stage doesn't re-offer.
+    if (g.isSkipLevel && g.state === 'playing' && g.wordsThisRound === 0) {
+      this.showOverlay('skip');
+    }
+  }
+
   showOverlay(kind) {
     const g = this.game;
+    this.els['ov-btn2'].classList.add('hidden'); // only the skip offer uses it
+
+    if (kind === 'skip') {
+      // Stage 3 of a section may be waved off: no tickets, no score — but you
+      // take a standing slip that cashes itself in when its moment comes.
+      const boon = BOONS.find((b) => b.id === g.skipOffer) || BOONS[0];
+      this.els['ov-title'].textContent = 'SKIP THE STAGE?';
+      this.els['ov-body'].innerHTML =
+        `Level ${g.level} can be waved off. Take the slip and the press stands idle — ` +
+        `you forfeit this level's tickets entirely.` +
+        `<div class="skip-boon">` +
+          `<div class="skip-boon-title">${this.slipArt(boon, 'slip-icon-sm')} ${boon.name}</div>` +
+          `<div>${boon.desc}</div>` +
+        `</div>` +
+        `<div class="skip-cost">Slips wait in your pocket and fire themselves the moment they can.</div>`;
+      this.els['ov-btn2'].textContent = 'TAKE THE SLIP';
+      this.els['ov-btn2'].classList.remove('hidden');
+      this.els['ov-btn'].textContent = 'RUN THE STAGE';
+      this.overlayKind = kind;
+      this.els['overlay'].classList.remove('hidden');
+      return;
+    }
+
     if (kind === 'won') {
       this.els['ov-title'].textContent = g.isBossLevel ? 'BOSS DEFEATED' : 'PRESS RUN COMPLETE';
       // Itemised ticket payout: longest word, unused plays, then each Book.
       const payoutRows = g.lastPayout
         .map((p) => `<div class="pay-row"><span>${p.label}</span><b>+${p.amount}</b></div>`)
         .join('');
+      // Side-quest verdict, if this stage carried one.
+      const q = g.questResult;
+      const questLine = q
+        ? `<div class="ov-quest ${q.passed ? 'ok' : 'no'}">` +
+          (q.passed ? `★ Side-quest complete — ${q.name}: ${q.msg}`
+            : `Side-quest missed — ${q.name} (${q.msg})`) + `</div>`
+        : '';
       this.els['ov-body'].innerHTML =
         `Level ${g.level} cleared — <b>${Util.fmt(g.roundScore)}</b> / ${Util.fmt(g.target)}<br>` +
         `<div class="pay-list">${payoutRows}</div>` +
-        `<span class="big-tickets">+${g.lastTicketsEarned} TICKETS</span>`;
+        `<span class="big-tickets">+${g.lastTicketsEarned} TICKETS</span>` +
+        questLine;
       this.els['ov-btn'].textContent = g.shopDue ? 'TO THE FOUNDRY' : 'NEXT LEVEL';
     } else {
       const s = g.stats;
@@ -1183,6 +1277,10 @@ class UI {
 
   onOverlayButton() {
     this.els['overlay'].classList.add('hidden');
+    if (this.overlayKind === 'skip') {
+      Sfx.click(); // RUN THE STAGE — just play it
+      return;
+    }
     if (this.overlayKind === 'won') {
       if (this.game.shopDue) {
         this.shop.open();
@@ -1193,9 +1291,25 @@ class UI {
       this.game.nextLevel();
       this.render();
       this.game.saveRun();
+      this.maybeOfferSkip();
     } else {
       this.openDeckPick(); // NEW RUN goes through the case selection
     }
+  }
+
+  // The overlay's secondary button — only the skip offer uses it.
+  onOverlaySecondary() {
+    if (this.overlayKind !== 'skip') return;
+    const boon = this.game.skipLevel();
+    this.els['overlay'].classList.add('hidden');
+    if (boon) {
+      Sfx.buy();
+      this.toast(`Stage skipped — ${boon.name} taken`);
+    }
+    this.render();
+    this.game.saveRun();
+    // Skipping just advances the stage — the shop still opens on its own
+    // cadence (after CLEARING a shop-due level), so nothing to do here.
   }
 
   // --- The Foundry (shop) ---------------------------------------------------
@@ -1212,6 +1326,7 @@ class UI {
           const donated = offer.sticker && offer.sticker.noSlot;
           const blocked = (g.books.isFull && !donated) ? 'SHELF FULL'
             : (!s.canAfford(cost) ? tk(cost) : null);
+          const buyLabel = cost === 0 ? 'FREE — TAKE IT' : 'BUY · ' + tk(cost);
           return `<div class="shop-card shop-card-book">
             ${this.bookArt(b, '', offer.sticker)}
             <h4>${b.name}</h4>
@@ -1220,7 +1335,7 @@ class UI {
             ${offer.sticker ? `<div class="sticker-line">${offer.sticker.name} — ${offer.sticker.desc}</div>` : ''}
             ${b.flavor ? `<div class="flavor">${b.flavor}</div>` : ''}
             <button class="btn btn-buy" data-act="book" data-i="${i}" ${blocked ? 'disabled' : ''}>
-              ${blocked || 'BUY · ' + tk(cost)}</button>
+              ${blocked || buyLabel}</button>
           </div>`;
         }).join('');
 
@@ -1229,8 +1344,8 @@ class UI {
           <span class="pen-icon" style="color: var(--copper)"><svg viewBox="0 0 48 48"><use href="#icon-pen"/></svg></span>
           <h4>Pen Pack</h4>
           <div class="desc">Pull ${CFG.PEN_TILE_PULLS} slugs from your bag, choose 1 of ${CFG.PEN_CHOICES} pens, and ink one slug — rewriting its style.</div>
-          <button class="btn btn-buy" data-act="penpack" ${s.canAfford(CFG.PEN_PACK_COST) ? '' : 'disabled'}>
-            BUY · ${tk(CFG.PEN_PACK_COST)}</button>
+          <button class="btn btn-buy" data-act="penpack" ${s.canAfford(s.penCost()) ? '' : 'disabled'}>
+            ${s.penCost() === 0 ? 'FREE — TAKE IT' : 'BUY · ' + tk(s.penCost())}</button>
         </div>`
       : '';
 
@@ -1246,14 +1361,16 @@ class UI {
 
     const consCards = s.consumables.length === 0 ? '<p class="sold-out">Sold out.</p>'
       : s.consumables.map((c, i) => {
+          const cCost = s.consumableCost(i);
           const blocked = g.consumables.length >= CFG.CONSUMABLE_SLOTS ? 'POCKETS FULL'
-            : (!s.canAfford(c.cost) ? tk(c.cost) : null);
+            : (!s.canAfford(cCost) ? tk(cCost) : null);
+          const cLabel = cCost === 0 ? 'FREE — TAKE IT' : 'BUY · ' + tk(cCost);
           return `<div class="shop-card shop-card-slip ${c.rare ? 'slip-rare' : ''}">
             ${this.slipArt(c)}
             <h4>${c.name}${c.rare ? ' <span class="rarity r-rare">RARE</span>' : ''}</h4>
             <div class="desc">${c.desc}</div>
             <button class="btn btn-buy" data-act="cons" data-i="${i}" ${blocked ? 'disabled' : ''}>
-              ${blocked || 'BUY · ' + tk(c.cost)}</button>
+              ${blocked || cLabel}</button>
           </div>`;
         }).join('');
 
@@ -1591,6 +1708,7 @@ class UI {
     Sfx.buy();
     this.render();
     if (this.game.state === 'roundWon') this.showOverlay('won');
+    else this.maybeOfferSkip(); // resumed onto an untouched skippable stage
     this.toast(`Resumed — level ${this.game.level}`);
   }
 
@@ -1724,6 +1842,7 @@ class UI {
       this.game.nextLevel();
       this.render();
       this.game.saveRun(); // shop closed → next round is the new checkpoint
+      this.maybeOfferSkip();
       return;
     }
 

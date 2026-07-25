@@ -1725,3 +1725,117 @@ body {
 @media (max-width: 860px) {
   .continue-row { flex-direction: column; align-items: stretch; gap: 8px; text-align: center; }
 }
+
+/* ---- The section map --------------------------------------------------- */
+/* Six stages of the current run of the press, left→right, with the boss's
+   seal at the end. Cleared stages dim, the live one is ringed in copper. */
+#section-map {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.map-node {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 1px 3px;
+  border: 1px solid var(--brass-dark);
+  border-radius: 3px;
+  background: var(--ink);
+  color: var(--paper-dim);
+  position: relative;
+}
+.map-mark { font-size: 12px; line-height: 1; }
+.map-mark svg { width: 20px; height: 20px; display: block; }
+.map-num { font-size: 8px; letter-spacing: 0.5px; opacity: 0.75; }
+
+/* Stage kinds */
+.map-node.map-skip { border-color: var(--verdigris); color: var(--verdigris); }
+.map-node.map-quest { border-color: var(--gold); color: var(--gold); }
+.map-node.map-boss { border-color: var(--press-red); color: var(--press-red); }
+
+/* Where you are, and what you've already run off. */
+.map-node.map-done { opacity: 0.38; }
+.map-node.map-now {
+  background: var(--ink-3);
+  box-shadow: 0 0 0 2px var(--copper-hot), 0 0 10px rgba(237, 168, 95, 0.35);
+  color: var(--paper);
+}
+.map-node.map-now .map-num { opacity: 1; color: var(--copper-hot); }
+.map-node.map-done .map-mark::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--verdigris);
+}
+
+/* ---- Side-quest plaque -------------------------------------------------- */
+.panel.quest { border-color: var(--gold); box-shadow: 0 0 12px rgba(212, 160, 23, 0.18); }
+.panel-label.quest-label { color: var(--gold); }
+.quest-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--gold);
+  line-height: 1.15;
+}
+.quest-reward {
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: var(--copper-hot);
+  margin-top: 4px;
+  border-top: 1px dotted var(--brass-dark);
+  padding-top: 4px;
+}
+.panel.quest.quest-done { border-color: var(--verdigris); box-shadow: 0 0 12px rgba(79, 174, 150, 0.25); }
+.panel.quest.quest-done .quest-name { color: var(--verdigris); }
+
+/* ---- Overlay: two-button footer + skip offer / quest lines -------------- */
+.ov-buttons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+.skip-boon {
+  border: 2px dashed var(--brass);
+  border-radius: 4px;
+  background: var(--paper-2);
+  padding: 12px 14px;
+  margin: 12px 0;
+  text-align: left;
+}
+.skip-boon .skip-boon-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 3px;
+}
+.skip-cost { font-size: 11px; color: #8f6a3a; font-style: italic; margin-top: 8px; }
+
+.ov-quest {
+  border-top: 1px dotted #b3a88e;
+  margin-top: 10px;
+  padding-top: 8px;
+  font-size: 12px;
+}
+.ov-quest.ok { color: #2f7d68; }
+.ov-quest.no { color: #9a6b5e; }
+
+/* Standing slips waiting to cash in (sidebar list). */
+.boon-row { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--copper-hot); }
+.boon-row .slip-icon svg { width: 13px; height: 13px; }
+
+@media (max-width: 860px) {
+  #map-panel { min-width: 210px; }
+  #section-map { gap: 3px; }
+  .map-mark svg { width: 15px; height: 15px; }
+  .map-mark { font-size: 10px; }
+  .quest-name { font-size: 12px; }
+  #quest-panel { max-width: 190px; }
+}
