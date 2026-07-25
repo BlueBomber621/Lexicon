@@ -21,6 +21,22 @@ const Util = {
     return n.toLocaleString('en-US');
   },
 
+  // "Parse" a goal: keep its upper `digits` digits and zero the rest
+  // (3348 -> 3300). Truncates, never rounds up. The single rounding rule the
+  // target curve uses — see Game.target.
+  parse(n, digits = 2) {
+    if (!isFinite(n) || n <= 0) return 0;
+    const mag = Math.pow(10, Math.max(0, Math.floor(Math.log10(n)) - (digits - 1)));
+    return Math.floor(n / mag) * mag;
+  },
+
+  // The magnitude `parse` zeroes away — one step below the number's leading
+  // digit (8700 -> 100). Used as the floor on a target's per-level increment
+  // so every stage always moves the parsed number.
+  grain(n) {
+    return Math.pow(10, Math.max(0, Math.floor(Math.log10(n)) - 1));
+  },
+
   // Does the slug at this step spell any letter from `set`? Multi-letter
   // sorts and resolved wildcards count, so Œ registers as containing an E.
   spellsAny(step, set) {

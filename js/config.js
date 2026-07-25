@@ -41,12 +41,14 @@ const CFG = {
 
   // --- Progression ----------------------------------------------------
   // Targets run in 6-level sections ending on a boss. Within a section the
-  // increment starts at DELTA and grows by DD each round. After each boss the
-  // next section starts at bossTarget × BOSS_MULT, CEILed to a magnitude that
-  // climbs every two sections (100, 100, 1000, 1000, 10k, ...), and DELTA/DD
-  // grow by DELTA_GROWTH/DD_GROWTH. As a FINAL step each round's requirement
-  // is rounded to the NEAREST magnitude one power below the section's
-  // (10 for sections 1-2, 100 for 3-4, ...). Full math in Game.target.
+  // increment starts at DELTA and grows by DD each round; after each boss the
+  // next section starts at bossTarget × BOSS_MULT, and DELTA/DD grow by
+  // DELTA_GROWTH/DD_GROWTH. There is ONE rounding rule: every goal is PARSED
+  // to PARSE_DIGITS digits (upper digits kept, the rest zeroed), and each
+  // level's increment is floored at the running goal's own grain so the parsed
+  // number always moves. Past ENDLESS_AFTER_BOSS bosses the run goes endless
+  // and every further section lifts the whole curve another power of ten.
+  // Full math in Game.target.
   TARGET: {
     START: 100,        // level 1 goal
     DELTA: 60,         // first increment of section 1
@@ -54,7 +56,11 @@ const CFG = {
     DD: 10,            // delta-delta of section 1
     DD_GROWTH: 15,     // delta-delta increases per section
     BOSS_MULT: 1.2,    // next section's start = last boss target × this
+    PARSE_DIGITS: 2,   // goals keep this many significant digits
   },
+  // Endless mode: after this many bosses (level 42 at BOSS_EVERY 6) each new
+  // section multiplies DELTA/DD by another ×10 — crazier and crazier scaling.
+  ENDLESS_AFTER_BOSS: 7,
   TICKETS_PER_LETTER: 1,    // tickets = longest word length that round × this
   TICKETS_PER_PLAY_LEFT: 1, // + this for each unused play at round end
   BOSS_EVERY: 6,            // every 6th level is a boss with a rule modifier
@@ -71,12 +77,15 @@ const CFG = {
   // Difficulties, named for paper sizes. `mult` scales the target curve's
   // DELTA / DD (and their growths); START and the rounding rules are shared.
   // Imperial draws from BOSSES_IMPERIAL when that pool has entries.
+  // The curve nerf: these are deliberately gentler than a raw difficulty
+  // ladder, because each step up also carries its own rule modifiers — the
+  // score goal is only half of what makes a paper size hard.
   DIFFICULTIES: [
     { id: 'note', name: 'Note', mult: 1, icon: 'icon-diff-note' },
     { id: 'letter', name: 'Letter', mult: 1.5, icon: 'icon-diff-letter' },
-    { id: 'demy', name: 'Demy', mult: 2.5, icon: 'icon-diff-demy' },
-    { id: 'royal', name: 'Royal', mult: 4, icon: 'icon-diff-royal' },
-    { id: 'imperial', name: 'Imperial', mult: 8, icon: 'icon-diff-imperial' },
+    { id: 'demy', name: 'Demy', mult: 2, icon: 'icon-diff-demy' },
+    { id: 'royal', name: 'Royal', mult: 3, icon: 'icon-diff-royal' },
+    { id: 'imperial', name: 'Imperial', mult: 5, icon: 'icon-diff-imperial' },
   ],
 
   // Sticker odds: chance a shop Book carries one, then rarity weights

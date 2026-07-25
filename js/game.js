@@ -214,34 +214,51 @@ class Game {
   // Score target. Runs in BOSS_EVERY-level sections: within a section the
   // increment starts at DELTA and grows by DD per round (delta-delta). After
   // each boss, the next section starts at bossTarget × BOSS_MULT CEILed to a
-  // magnitude that climbs every two sections (10^2, 10^2, 10^3, 10^3, ...),
+  // magnitude that climbs every two sections (10, 10, 100, 100, 1000, ...),
   // and DELTA/DD grow by their _GROWTH amounts. The raw sequence is computed
   // in real numbers; only as a FINAL step is each round's requirement rounded
-  // to the NEAREST magnitude one power below the section's ceil magnitude
-  // (10 for sections 1-2, 100 for 3-4, ...). See CFG.TARGET.
+  // to the NEAREST magnitude — the same one the ceiling uses, so the post-boss
+  // step stays close to BOSS_MULT instead of overshooting it. See CFG.TARGET.
   get target() {
-    const T = CFG.TARGET;
-    // Difficulty scales the whole delta system; START and rounding are shared.
     const f = CFG.DIFFICULTIES[this.difficulty || 0].mult;
     const section = Math.floor((this.level - 1) / CFG.BOSS_EVERY); // 0-based
     const round = (this.level - 1) % CFG.BOSS_EVERY;               // 0-based
 
-    // Walk prior sections in raw space to find this section's start.
-    let start = T.START;
+    // Walk every prior section in raw space to find this section's start: a
+    // section ends on its boss, and the next one opens at that × BOSS_MULT.
+    let start = CFG.TARGET.START;
     for (let s = 0; s < section; s++) {
-      const delta = (T.DELTA + T.DELTA_GROWTH * s) * f;
-      const dd = (T.DD + T.DD_GROWTH * s) * f;
-      const n = CFG.BOSS_EVERY - 1;
-      const bossRaw = start + n * delta + dd * (n * (n - 1) / 2);
-      const ceilMag = Math.pow(10, 2 + Math.floor(s / 2));
-      start = Math.ceil((bossRaw * T.BOSS_MULT) / ceilMag) * ceilMag;
+      start = Util.parse(this.walkSection(start, s, f, CFG.BOSS_EVERY - 1) * CFG.TARGET.BOSS_MULT,
+        CFG.TARGET.PARSE_DIGITS);
     }
+    return Util.parse(this.walkSection(start, section, f, round), CFG.TARGET.PARSE_DIGITS);
+  }
 
-    const delta = (T.DELTA + T.DELTA_GROWTH * section) * f;
-    const dd = (T.DD + T.DD_GROWTH * section) * f;
-    const raw = start + round * delta + dd * (round * (round - 1) / 2);
-    const nearMag = Math.pow(10, 1 + Math.floor(section / 2));
-    return Math.round(raw / nearMag) * nearMag;
+  // Step `rounds` levels into a section from its opening goal. Difficulty
+  // scales DELTA/DD; endless sections scale them again by a power of ten.
+  // Each step is floored at the running goal's own grain — the magnitude the
+  // parse would zero away — so a level can never ask for the same number as
+  // the one before it, however coarse the goals get.
+  walkSection(start, section, f, rounds) {
+    const T = CFG.TARGET;
+    const m = Game.endlessMag(section);
+    const delta = (T.DELTA + T.DELTA_GROWTH * section) * f * m;
+    const dd = (T.DD + T.DD_GROWTH * section) * f * m;
+    let goal = start;
+    for (let r = 1; r <= rounds; r++) {
+      goal += Math.max(delta + dd * (r - 1), Util.grain(goal));
+    }
+    return goal;
+  }
+
+  // ×10 per section once the run is past ENDLESS_AFTER_BOSS bosses; 1 before.
+  static endlessMag(section) {
+    return Math.pow(10, Math.max(0, section - CFG.ENDLESS_AFTER_BOSS + 1));
+  }
+
+  // True once the run is into the endless sections.
+  get isEndless() {
+    return this.section >= CFG.ENDLESS_AFTER_BOSS;
   }
 
   get isBossLevel() {
