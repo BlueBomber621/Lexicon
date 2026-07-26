@@ -248,9 +248,10 @@ class Game {
 
   // Step `rounds` levels into a section from its opening goal. Difficulty
   // scales DELTA/DD; endless sections scale them again by a power of ten.
-  // Both are floored at a multiple of the running goal's GRAIN — the last
-  // digit its parse still shows — so every level moves the requirement by a
-  // decisive amount, however large the goals get.
+  // Delta is floored at DELTA_GRAIN_MIN of the last digit the goal's parse
+  // shows; dd at DD_GRAIN_MIN of the place one below that, and dd only starts
+  // paying from the third round of a section. Both floors follow the parse
+  // depth, so a magnitude crossing never jolts the curve.
   walkSection(start, section, f, rounds) {
     const T = CFG.TARGET;
     const m = Game.endlessMag(section);
@@ -258,9 +259,11 @@ class Game {
     const baseDd = (T.DD + T.DD_GROWTH * section) * f * m;
     let goal = start;
     for (let r = 1; r <= rounds; r++) {
-      const g = Util.grain(goal, Game.parseDigits(goal, section));
-      goal += Math.max(baseDelta, g * T.DELTA_GRAIN_MIN)
-        + Math.max(baseDd, g * T.DD_GRAIN_MIN) * (r - 1);
+      const digits = Game.parseDigits(goal, section);
+      const gDelta = Util.grain(goal, digits);     // last digit shown
+      const gDd = Util.grain(goal, digits + 1);    // one place below it
+      goal += Math.max(baseDelta, gDelta * T.DELTA_GRAIN_MIN)
+        + Math.max(baseDd, gDd * T.DD_GRAIN_MIN) * Math.max(0, r - 2);
     }
     return goal;
   }

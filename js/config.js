@@ -50,12 +50,14 @@ const CFG = {
   // and every further section lifts the whole curve another power of ten.
   // Full math in Game.target.
   TARGET: {
+    // Tuned so a Note run peaks at a 10,000 goal on the last pre-endless boss
+    // (level 42) — that number is the endgame, not a mid-run checkpoint.
     START: 100,        // level 1 goal
-    DELTA: 60,         // first increment of section 1
-    DELTA_GROWTH: 40,  // delta increases per section
+    DELTA: 70,         // first increment of section 1
+    DELTA_GROWTH: 20,  // delta increases per section
     DD: 10,            // delta-delta of section 1
-    DD_GROWTH: 15,     // delta-delta increases per section
-    BOSS_MULT: 1.2,    // next section's start = last boss target × this
+    DD_GROWTH: 2,      // delta-delta increases per section
+    BOSS_MULT: 1.16,   // next section's start = last boss target × this
     // Goals keep this many significant digits (upper kept, rest zeroed). Once
     // a goal passes PARSE_LATE_ABOVE it switches to PARSE_DIGITS_LATE, so
     // five-figure goals step in hundreds rather than snapping in thousands —
@@ -65,11 +67,14 @@ const CFG = {
     PARSE_DIGITS: 2,
     PARSE_DIGITS_LATE: 3,
     PARSE_LATE_ABOVE: 10000,
-    // Per-level increments are floored at these multiples of the goal's grain
-    // (the last digit the parse still shows), so a level always moves the
-    // requirement by a decisive amount rather than the bare minimum tick.
+    // Floors, so every level moves the goal by a decisive amount. DELTA is
+    // floored at this many of the LAST DIGIT THE PARSE SHOWS; DD at this many
+    // of the place ONE BELOW that, and DD only starts contributing from the
+    // third round of a section. Both floors track the parse depth — pinning
+    // them to a fixed digit made a 10x grain jump at each magnitude crossing,
+    // which spiked whole sections (and, before that, drove the entire curve).
     DELTA_GRAIN_MIN: 2,
-    DD_GRAIN_MIN: 1,
+    DD_GRAIN_MIN: 3,
   },
   // Endless mode: after this many bosses (level 42 at BOSS_EVERY 6) each new
   // section multiplies DELTA/DD by another ×10 — crazier and crazier scaling.
