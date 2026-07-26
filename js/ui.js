@@ -19,6 +19,8 @@ class UI {
       'stat-level', 'stat-target', 'stat-score', 'stat-plays', 'stat-rerolls',
       'stat-tickets', 'stat-bag', 'stat-discard', 'target-fill', 'stat-difficulty',
       'boss-panel', 'boss-name', 'boss-desc', 'boss-seal',
+      'section-map', 'quest-panel', 'quest-name', 'quest-desc', 'quest-reward',
+      'ov-btn2',
       'shelf', 'shelf-count', 'cons-list', 'bin-area', 'bin',
       'penpick', 'penpick-card',
       'ro-word', 'ro-math', 'ro-points', 'ro-mult', 'ro-eq', 'ro-total',
@@ -45,6 +47,7 @@ class UI {
     this.els['btn-shuffle'].addEventListener('click', () => this.onShuffle());
     this.els['btn-clear'].addEventListener('click', () => this.onClear());
     this.els['ov-btn'].addEventListener('click', () => this.onOverlayButton());
+    this.els['ov-btn2'].addEventListener('click', () => this.onOverlaySecondary());
     this.els['btn-mute'].addEventListener('click', () => this.onMute());
     this.els['btn-library'].addEventListener('click', () => this.toggleLibrary());
     this.els['library-card'].addEventListener('click', (e) => {
@@ -95,8 +98,68 @@ class UI {
     this.renderReadout();
     this.renderControls();
     this.renderShelf();
+    this.renderMap();
+    this.renderQuest();
     this.renderBin();
     this.announceUnlocks();
+  }
+
+  // The section map: the six stages of this run of the press. Skip stages,
+  // the side-quest stage, and the boss (with its seal) are all telegraphed,
+  // cleared stages dim, and the live one is ringed.
+  renderMap() {
+    const g = this.game;
+    const el = this.els['section-map'];
+    if (!el) return;
+    const here = g.sectionRound;
+    let html = '';
+    for (let n = 1; n <= CFG.BOSS_EVERY; n++) {
+      const level = g.section * CFG.BOSS_EVERY + n;
+      const isBoss = n === CFG.BOSS_EVERY;
+      const isSkip = n === CFG.SKIP_ROUND;
+      const isQuest = n === CFG.QUEST_ROUND;
+      const hasShop = level % CFG.SHOP_EVERY === 0; // a Foundry follows this stage
+      const charred = isBoss && g.sectionBoss && g.sectionBoss.charred ? ' map-charred' : '';
+      const kind = (isBoss ? 'map-boss' : isSkip ? 'map-skip' : isQuest ? 'map-quest' : '') + charred;
+      const state = n < here ? 'map-done' : (n === here ? 'map-now' : '');
+      const zig = n % 2 ? 'zig-a' : 'zig-b'; // the press steps up and down
+
+      // Above the point: what the stage carries.
+      const flag = isBoss && g.sectionBoss
+        ? `<svg viewBox="0 0 48 48"><use href="#${g.sectionBoss.icon}"/></svg>`
+        : isBoss ? '✦' : isSkip ? '⇥' : isQuest ? '★' : '';
+      // Below it: the Foundry mark.
+      const shop = hasShop
+        ? `<svg viewBox="0 0 24 24"><use href="#icon-map-shop"/></svg>` : '';
+
+      const notes = [];
+      if (isBoss) notes.push(g.sectionBoss ? `Boss — ${g.sectionBoss.name}: ${g.sectionBoss.desc}` : 'Boss');
+      if (isSkip) notes.push('Skippable — wave it off for a slip (and lose the Foundry after it)');
+      if (isQuest) notes.push('Carries a side-quest');
+      if (!notes.length) notes.push('A plain stage');
+      if (hasShop) notes.push('The Foundry opens after it');
+
+      html += `<div class="map-node ${kind} ${state} ${zig}" title="Level ${level} · ${notes.join(' · ')}">` +
+        `<span class="map-flag">${flag}</span>` +
+        `<span class="map-dot">${level}</span>` +
+        `<span class="map-shop">${shop}</span></div>`;
+    }
+    el.innerHTML = html;
+  }
+
+  // The side-quest plaque — task and prize, both known before you play.
+  renderQuest() {
+    const g = this.game;
+    const panel = this.els['quest-panel'];
+    if (!panel) return;
+    const def = g.questDef, reward = g.questReward;
+    panel.classList.toggle('hidden', !def);
+    if (!def) return;
+    panel.classList.toggle('quest-done', !!g.questDone);
+    this.els['quest-name'].textContent = def.name;
+    this.els['quest-desc'].textContent = def.desc(g);
+    this.els['quest-reward'].textContent =
+      (g.questDone ? '✓ EARNED — ' : 'REWARD: ') + (reward ? reward.desc : '');
   }
 
   // Drain the game's unlock queue into toasts + a fanfare. Plain notes
@@ -177,6 +240,9 @@ class UI {
       this.els['boss-desc'].textContent = g.boss.desc;
       this.els['boss-seal'].innerHTML =
         `<svg viewBox="0 0 48 48"><use href="#${g.boss.icon}"/></svg>`;
+      // Charring Bosses burn: the seal gets the ember glow.
+      this.els['boss-seal'].classList.toggle('boss-charred', !!g.boss.charred);
+      this.els['boss-panel'].classList.toggle('panel-charred', !!g.boss.charred);
     }
   }
 
@@ -584,7 +650,13 @@ class UI {
           + `${this.slipArt(c, 'slip-icon-sm')}</div>`
         : '<div class="cons-slot-empty"></div>');
     }
-    this.els['cons-list'].innerHTML = consSlots.join('');
+    // Standing slips (boons) waiting to cash in ride along after the sundries.
+    const boonRows = (g.boons || []).map((id) => {
+      const b = BOONS.find((x) => x.id === id);
+      return b ? `<div class="boon-row" title="${b.desc}">` +
+        `${this.slipArt(b, 'slip-icon-sm')} ${b.name}</div>` : '';
+    }).join('');
+    this.els['cons-list'].innerHTML = consSlots.join('') + boonRows;
 
     this.els['btn-library'].textContent =
       `LIBRARY ${g.unlocks.unlockedCount}/${BOOKS.length}`;
@@ -1129,6 +1201,7 @@ class UI {
       case 'vowel-slip': return 'The Vowel Slip needs an A or an E in your reroll tray';
       case 'sticker-slip': return 'Every Book on your shelf already wears a sticker';
       case 'typewriter': return 'The Typewriter cannot spell anything from this hand';
+      case 'service-nomination': return 'This level already carries a side-quest';
       default: return 'Cannot use that now';
     }
   }
@@ -1402,18 +1475,60 @@ class UI {
 
   // --- Overlay (round end / game over) -------------------------------------
 
+  // If the freshly-started level is a skippable stage, put the offer up.
+  maybeOfferSkip() {
+    const g = this.game;
+    // Only before you've committed a word — resuming mid-stage doesn't re-offer.
+    if (g.isSkipLevel && g.state === 'playing' && g.wordsThisRound === 0) {
+      this.showOverlay('skip');
+    }
+  }
+
   showOverlay(kind) {
     const g = this.game;
+    this.els['ov-btn2'].classList.add('hidden'); // only the skip offer uses it
+
+    if (kind === 'skip') {
+      // Stage 3 of a section may be waved off: no tickets, no score — but you
+      // take a standing slip that cashes itself in when its moment comes.
+      const boon = BOONS.find((b) => b.id === g.skipOffer) || BOONS[0];
+      this.els['ov-title'].textContent = 'SKIP THE STAGE?';
+      const losesShop = g.level % CFG.SHOP_EVERY === 0;
+      this.els['ov-body'].innerHTML =
+        `Level ${g.level} can be waved off. Take the slip and the press stands idle — ` +
+        `you forfeit this level's tickets` +
+        (losesShop ? ' <b>and the Foundry visit that would follow</b>' : '') + '.' +
+        `<div class="skip-boon">` +
+          `<div class="skip-boon-title">${this.slipArt(boon, 'slip-icon-sm')} ${boon.name}</div>` +
+          `<div>${boon.desc}</div>` +
+        `</div>` +
+        `<div class="skip-cost">Slips wait in your pocket and fire themselves the moment they can.</div>`;
+      this.els['ov-btn2'].textContent = 'TAKE THE SLIP';
+      this.els['ov-btn2'].classList.remove('hidden');
+      this.els['ov-btn'].textContent = 'RUN THE STAGE';
+      this.overlayKind = kind;
+      this.els['overlay'].classList.remove('hidden');
+      return;
+    }
+
     if (kind === 'won') {
       this.els['ov-title'].textContent = g.isBossLevel ? 'BOSS DEFEATED' : 'PRESS RUN COMPLETE';
       // Itemised ticket payout: longest word, unused plays, then each Book.
       const payoutRows = g.lastPayout
         .map((p) => `<div class="pay-row"><span>${p.label}</span><b>+${p.amount}</b></div>`)
         .join('');
+      // Side-quest verdict, if this stage carried one.
+      const q = g.questResult;
+      const questLine = q
+        ? `<div class="ov-quest ${q.passed ? 'ok' : 'no'}">` +
+          (q.passed ? `★ Side-quest complete — ${q.name}: ${q.msg}`
+            : `Side-quest missed — ${q.name} (${q.msg})`) + `</div>`
+        : '';
       this.els['ov-body'].innerHTML =
         `Level ${g.level} cleared — <b>${Util.fmt(g.roundScore)}</b> / ${Util.fmt(g.target)}<br>` +
         `<div class="pay-list">${payoutRows}</div>` +
-        `<span class="big-tickets">+${g.lastTicketsEarned} TICKETS</span>`;
+        `<span class="big-tickets">+${g.lastTicketsEarned} TICKETS</span>` +
+        questLine;
       this.els['ov-btn'].textContent = g.shopDue ? 'TO THE FOUNDRY' : 'NEXT LEVEL';
     } else {
       const s = g.stats;
@@ -1431,6 +1546,10 @@ class UI {
 
   onOverlayButton() {
     this.els['overlay'].classList.add('hidden');
+    if (this.overlayKind === 'skip') {
+      Sfx.click(); // RUN THE STAGE — just play it
+      return;
+    }
     if (this.overlayKind === 'won') {
       if (this.game.shopDue) {
         this.shop.open();
@@ -1445,9 +1564,25 @@ class UI {
       this.game.nextLevel();
       this.render();
       this.game.saveRun();
+      this.maybeOfferSkip();
     } else {
       this.openDeckPick(); // NEW RUN goes through the case selection
     }
+  }
+
+  // The overlay's secondary button — only the skip offer uses it.
+  onOverlaySecondary() {
+    if (this.overlayKind !== 'skip') return;
+    const boon = this.game.skipLevel();
+    this.els['overlay'].classList.add('hidden');
+    if (boon) {
+      Sfx.buy();
+      this.toast(`Stage skipped — ${boon.name} taken`);
+    }
+    this.render();
+    this.game.saveRun();
+    // Skipping just advances the stage — the shop still opens on its own
+    // cadence (after CLEARING a shop-due level), so nothing to do here.
   }
 
   // --- Victory screen (winning boss beaten) --------------------------------
@@ -1556,7 +1691,7 @@ class UI {
           return `<div class="shop-item ${blocked ? 'blocked' : ''}" data-kind="book" data-i="${i}">
             ${this.bookArt(b, '', offer.sticker)}
             <span class="shop-item-name">${b.name}</span>
-            <span class="shop-item-cost r-${b.rarity}">${tk(cost)}</span>
+            <span class="shop-item-cost r-${b.rarity}">${cost === 0 ? 'FREE' : tk(cost)}</span>
           </div>`;
         }).join('');
 
@@ -1564,7 +1699,7 @@ class UI {
       ? `<div class="shop-item ${s.canAfford(CFG.PEN_PACK_COST) ? '' : 'blocked'}" data-kind="pen" data-i="0">
           <span class="pen-icon" style="color: var(--copper)"><svg viewBox="0 0 48 48"><use href="#icon-pen"/></svg></span>
           <span class="shop-item-name">Pen Pack</span>
-          <span class="shop-item-cost">${tk(CFG.PEN_PACK_COST)}</span>
+          <span class="shop-item-cost">${s.penCost() === 0 ? 'FREE' : tk(s.penCost())}</span>
         </div>`
       : '';
 
@@ -1577,12 +1712,13 @@ class UI {
 
     const consCards = s.consumables.length === 0 ? '<p class="sold-out">Sold out.</p>'
       : s.consumables.map((c, i) => {
+          const cCost = s.consumableCost(i);
           const blocked = g.consumables.length >= CFG.CONSUMABLE_SLOTS ? 'POCKETS FULL'
-            : (!s.canAfford(c.cost) ? tk(c.cost) : null);
+            : (!s.canAfford(cCost) ? tk(cCost) : null);
           return `<div class="shop-item ${blocked ? 'blocked' : ''} ${c.rare ? 'slip-rare' : ''}" data-kind="cons" data-i="${i}">
             ${this.slipArt(c)}
             <span class="shop-item-name">${c.name}</span>
-            <span class="shop-item-cost">${tk(c.cost)}</span>
+            <span class="shop-item-cost">${cCost === 0 ? 'FREE' : tk(cCost)}</span>
           </div>`;
         }).join('');
 
@@ -1858,12 +1994,33 @@ class UI {
       <p class="picker-hint">Every case starts a fresh run${save ? ', replacing the one above' : ''}.</p>
       <div class="shop-section-title">PAPER SIZE — difficulty</div>
       <div class="diff-row">${diffs}</div>
+      ${this.challengeList(this.diffChoice)}
       <div class="shop-section-title">THE CASE — starting deck</div>
       <div class="lib-grid">${cards}</div>
       <div class="shop-foot">
         <span></span>
         ${canCancel ? '<button class="btn" data-act="cancel-deck">KEEP CURRENT RUN</button>' : ''}
       </div>`;
+  }
+
+  // The standing rule modifiers a paper size carries — its own and every one
+  // beneath it. Each is a bordered card themed to its challenge's colour.
+  challengeList(difficulty) {
+    const list = Game.challengesFor(difficulty);
+    if (list.length === 0) {
+      return `<p class="chal-none">A clean sheet — Note adds no rules of its own.</p>`;
+    }
+    const cards = list.map((c) => `
+      <div class="chal-box" style="--chal:${c.color}">
+        <span class="chal-icon"><svg viewBox="0 0 48 48"><use href="#${c.icon}"/></svg></span>
+        <div>
+          <div class="chal-title">${c.name}</div>
+          <div class="chal-desc">${c.desc}</div>
+        </div>
+      </div>`).join('');
+    return `<div class="chal-list">
+      <div class="chal-lead">${list.length} standing rule${list.length > 1 ? 's' : ''}, stacked:</div>
+      ${cards}</div>`;
   }
 
   onDeckPickClick(e) {
@@ -1912,6 +2069,7 @@ class UI {
     Sfx.buy();
     this.render();
     if (this.game.state === 'roundWon') this.showOverlay('won');
+    else this.maybeOfferSkip(); // resumed onto an untouched skippable stage
     this.toast(`Resumed — level ${this.game.level}`);
   }
 
@@ -2037,6 +2195,7 @@ class UI {
       this.game.nextLevel();
       this.render();
       this.game.saveRun(); // shop closed → next round is the new checkpoint
+      this.maybeOfferSkip();
       return;
     }
     if (btn.dataset.act === 'restock') {

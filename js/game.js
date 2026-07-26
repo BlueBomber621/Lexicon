@@ -52,6 +52,10 @@ class Game {
     this.tickets = (this.deckDef.mods && this.deckDef.mods.startTickets) || 0;
     this.books.clear();
     this.consumables = [];
+    this.boons = [];           // standing slips waiting for their moment
+    this.bannedBooks = [];     // Books burnt out of the run (The Purge)
+    this.bankrupt = false;     // Label Tax drove you past the debt limit
+    this.sectionBoss = null;   // this section's boss, known from its first stage
     this.lastBossId = null;
     this.runWords = new Set(); // every word forged this run (Errata's unlock)
     this.runYCount = 0;        // Y slugs played this run (Quizlet's unlock)
@@ -92,14 +96,29 @@ class Game {
 
   startRound() {
     this.clearBoss();
+    // Each section's boss is drawn at its FIRST stage, so the section map can
+    // telegraph which seal is waiting at the end of it.
+    if (this.sectionRound === 1 || !this.sectionBoss) this.pickSectionBoss();
     this.deck.reset(); // every tile back in the bag, fresh shuffle
     this.stick = [];
     this.tray = [];
     this.roundLetters = new Set(); // distinct letters played this round (Abecedarian)
+    this.roundBestPlay = 0;        // best single word this round (side-quests)
+    this.roundRerollsFired = 0;    // reroll trays fired this round (side-quests)
     this.freePurchase = false;     // Coupon Book grants its free buy at shop open
-    this.handSize = CFG.RACK_SIZE;
-    this.plays = CFG.PLAYS_PER_ROUND;
-    this.rerolls = CFG.REROLLS_PER_ROUND;
+    // Stage QUEST_ROUND of a section carries an optional side-quest; the task
+    // and its prize are both drawn now so the UI can show them up front.
+    this.quest = this.isQuestLevel ? this.rollQuest() : null;
+    this.questDone = false;
+    // Stage SKIP_ROUND may be waved off for a slip — rolled now so the offer
+    // can name exactly what you'd be taking.
+    this.skipOffer = this.isSkipLevel
+      ? BOONS[Math.floor(Math.random() * BOONS.length)].id : null;
+    // Difficulty challenges bite first (Short Measure's hand, Rationed Ink's
+    // reroll), before starting-case mods and Books get their say.
+    this.handSize = CFG.RACK_SIZE + this.challengeMod('handDelta');
+    this.plays = CFG.PLAYS_PER_ROUND + this.challengeMod('playsDelta');
+    this.rerolls = CFG.REROLLS_PER_ROUND + this.challengeMod('rerollsDelta');
     // Starting-case round mods (The Jobbing Case's -1 reroll, etc.)
     if (this.deckDef.mods) {
       this.plays += this.deckDef.mods.plays || 0;
@@ -118,6 +137,10 @@ class Game {
     this.books.onRoundStart();              // roundStart Books apply last
     this.plays = Math.max(1, this.plays);   // Incunabula etc. can't zero you out
     this.rerolls = Math.max(0, this.rerolls);
+    // A boss may pin the play count outright, after Books have had their say
+    // (The Post's single play can't be talked up by Overtime).
+    if (this.boss && this.boss.forcePlays) this.plays = this.boss.forcePlays;
+    this.consumeBoons('any');               // standing slips fire when they can
     this.state = 'playing'; // 'playing' | 'roundWon' | 'gameOver'
   }
 
@@ -126,55 +149,179 @@ class Game {
     this.startRound();
   }
 
-  // Score target for the current level. Normal play (levels 1 .. BOSS_EVERY ×
-  // WIN_BOSSES) runs the sectioned DELTA/DD curve; beyond the winning boss the
-  // Endless multiplier model takes over. Both round to 2 significant figures.
+  // --- Sections, skips, and side-quests ---------------------------------
+
+  // Position within the current 6-level section, 1-based (1..BOSS_EVERY).
+  get sectionRound() {
+    return ((this.level - 1) % CFG.BOSS_EVERY) + 1;
+  }
+
+  // 0-based index of the section the run is in.
+  get section() {
+    return Math.floor((this.level - 1) / CFG.BOSS_EVERY);
+  }
+
+  // --- Difficulty challenges ---------------------------------------------
+
+  // Every challenge this run carries: the chosen difficulty's own, plus all of
+  // them beneath it. Note carries none. Static so the difficulty picker can
+  // list a size's challenges before a run exists.
+  static challengesFor(difficulty) {
+    const out = [];
+    for (let i = 1; i <= (difficulty || 0); i++) {
+      const id = CFG.DIFFICULTIES[i] && CFG.DIFFICULTIES[i].challenge;
+      const def = id && CHALLENGES.find((c) => c.id === id);
+      if (def) out.push(def);
+    }
+    return out;
+  }
+
+  get challenges() {
+    return Game.challengesFor(this.difficulty);
+  }
+
+  // Summed value of one challenge modifier across every active challenge.
+  challengeMod(key) {
+    return this.challenges.reduce((n, c) => n + ((c.mods && c.mods[key]) || 0), 0);
+  }
+
+  get isSkipLevel() {
+    return this.sectionRound === CFG.SKIP_ROUND;
+  }
+
+  get isQuestLevel() {
+    return this.sectionRound === CFG.QUEST_ROUND;
+  }
+
+  // Draw this section's boss up front (no immediate repeat), so the map can
+  // show its seal from the section's first stage.
+  pickSectionBoss() {
+    // Wildfire (the Imperial challenge) replaces the whole roster with the
+    // Charring Bosses.
+    const roster = (this.challengeMod('charredBosses') > 0 && BOSSES_IMPERIAL.length > 0)
+      ? BOSSES_IMPERIAL : BOSSES;
+    const noRepeat = roster.filter((b) => b.id !== this.lastBossId);
+    const pool = noRepeat.length ? noRepeat : roster;
+    this.sectionBoss = pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  // The score a "big play" quest asks for: a share of this level's target.
+  questThreshold() {
+    return Math.ceil(this.target * CFG.QUEST_BIG_PLAY);
+  }
+
+  // Pair a random task with a random prize for a quest level.
+  rollQuest() {
+    const def = SIDE_QUESTS[Math.floor(Math.random() * SIDE_QUESTS.length)];
+    const reward = QUEST_REWARDS[Math.floor(Math.random() * QUEST_REWARDS.length)];
+    return { id: def.id, rewardId: reward.id };
+  }
+
+  get questDef() {
+    return this.quest ? SIDE_QUESTS.find((q) => q.id === this.quest.id) : null;
+  }
+
+  get questReward() {
+    return this.quest ? QUEST_REWARDS.find((r) => r.id === this.quest.rewardId) : null;
+  }
+
+  // Skip a skippable stage: no tickets, no score, the level simply passes —
+  // and you take a slip in exchange. Returns the boon def taken, or null.
+  skipLevel() {
+    if (!this.isSkipLevel || this.state !== 'playing') return null;
+    const def = BOONS.find((b) => b.id === this.skipOffer) || BOONS[0];
+    this.addBoon(def.id);
+    this.nextLevel();
+    return def;
+  }
+
+  // --- Boons (standing slips) -------------------------------------------
+
+  addBoon(id) {
+    this.boons.push(id);
+    // 'any' boons try to land the moment they're taken.
+    this.consumeBoons('any');
+  }
+
+  // Fire every queued boon whose moment has come. A boon that can't land yet
+  // (a Sticker Sheet with no bare Book) returns false and stays queued.
+  consumeBoons(moment, shop = null) {
+    this.boons = this.boons.filter((id) => {
+      const def = BOONS.find((b) => b.id === id);
+      if (!def || def.moment !== moment) return true; // not its moment — keep
+      return !def.apply(this, shop); // applied → drop it; refused → keep
+    });
+  }
+
+  // Score target. Runs in BOSS_EVERY-level sections: within a section the
+  // increment starts at DELTA and grows by DD per round (delta-delta). After
+  // each boss, the next section starts at bossTarget × BOSS_MULT CEILed to a
+  // magnitude that climbs every two sections (10, 10, 100, 100, 1000, ...),
+  // and DELTA/DD grow by their _GROWTH amounts. The raw sequence is computed
+  // in real numbers; only as a FINAL step is each round's requirement rounded
+  // to the NEAREST magnitude — the same one the ceiling uses, so the post-boss
+  // step stays close to BOSS_MULT instead of overshooting it. See CFG.TARGET.
   get target() {
-    const lastNormal = CFG.BOSS_EVERY * CFG.WIN_BOSSES;
-    return this.level <= lastNormal
-      ? this._normalTarget(this.level)
-      : this._endlessTarget(this.level, lastNormal);
-  }
-
-  // The sectioned raw curve: within a section the increment starts at DELTA and
-  // grows by DD per round; between sections the start is the prior boss target ×
-  // BOSS_MULT, and DELTA/DD grow by their _GROWTH amounts. Difficulty scales the
-  // whole delta system. Rounded to 2 significant figures as the final step.
-  _normalTarget(level) {
-    const T = CFG.TARGET;
     const f = CFG.DIFFICULTIES[this.difficulty || 0].mult;
-    const section = Math.floor((level - 1) / CFG.BOSS_EVERY); // 0-based
-    const round = (level - 1) % CFG.BOSS_EVERY;               // 0-based
+    const section = Math.floor((this.level - 1) / CFG.BOSS_EVERY); // 0-based
+    const round = (this.level - 1) % CFG.BOSS_EVERY;               // 0-based
 
-    // Walk prior sections in raw space to find this section's start.
-    let start = T.START;
+    // Walk every prior section in raw space to find this section's start: a
+    // section ends on its boss, and the next one opens at that × BOSS_MULT,
+    // parsed at the depth of the section it opens.
+    let start = CFG.TARGET.START;
     for (let s = 0; s < section; s++) {
-      const delta = (T.DELTA + T.DELTA_GROWTH * s) * f;
-      const dd = (T.DD + T.DD_GROWTH * s) * f;
-      const n = CFG.BOSS_EVERY - 1;
-      const bossRaw = start + n * delta + dd * (n * (n - 1) / 2);
-      start = bossRaw * T.BOSS_MULT;
+      const raw = this.walkSection(start, s, f, CFG.BOSS_EVERY - 1) * CFG.TARGET.BOSS_MULT;
+      start = Util.parse(raw, Game.parseDigits(raw, s + 1));
     }
-
-    const delta = (T.DELTA + T.DELTA_GROWTH * section) * f;
-    const dd = (T.DD + T.DD_GROWTH * section) * f;
-    const raw = start + round * delta + dd * (round * (round - 1) / 2);
-    return Util.sig2(raw);
+    const raw = this.walkSection(start, section, f, round);
+    const goal = Util.parse(raw, Game.parseDigits(raw, section));
+    // A boss may bend this level's goal (The Post halves it).
+    const gm = this.boss && this.boss.goalMult;
+    if (!gm) return goal;
+    return Math.max(1, Util.parse(goal * gm, Game.parseDigits(goal * gm, section)));
   }
 
-  // Endless: starting from the winning-boss requirement, each level multiplies
-  // the requirement by a multiplier that itself grows every level (DELTA and DD
-  // gone multiplicative); an Endless boss multiplies by BOSS_BONUS + that
-  // multiplier. Computed fresh from level so it stays a pure getter.
-  _endlessTarget(level, lastNormal) {
-    const E = CFG.ENDLESS;
-    let req = this._normalTarget(lastNormal);
-    let dm = E.DELTA_MULT;
-    for (let L = lastNormal + 1; L <= level; L++) {
-      req *= (L % CFG.BOSS_EVERY === 0) ? (E.BOSS_BONUS + dm) : dm;
-      dm += E.DELTA_MULT_GROWTH;
+  // How many significant digits a goal keeps: two while goals are small,
+  // three once they pass PARSE_LATE_ABOVE (by SIZE, not by level — a hard
+  // difficulty reaches five figures far sooner), and back to two in endless,
+  // where goals run to millions and round numbers read better.
+  static parseDigits(goal, section) {
+    const T = CFG.TARGET;
+    if (section >= CFG.WIN_BOSSES) return T.PARSE_DIGITS;
+    return goal >= T.PARSE_LATE_ABOVE ? T.PARSE_DIGITS_LATE : T.PARSE_DIGITS;
+  }
+
+  // Step `rounds` levels into a section from its opening goal. Difficulty
+  // scales DELTA/DD; endless sections scale them again by a power of ten.
+  // Delta is floored at DELTA_GRAIN_MIN of the last digit the goal's parse
+  // shows; dd at DD_GRAIN_MIN of the place one below that, and dd only starts
+  // paying from the third round of a section. Both floors follow the parse
+  // depth, so a magnitude crossing never jolts the curve.
+  walkSection(start, section, f, rounds) {
+    const T = CFG.TARGET;
+    const m = Game.endlessMag(section);
+    const baseDelta = (T.DELTA + T.DELTA_GROWTH * section) * f * m;
+    const baseDd = (T.DD + T.DD_GROWTH * section) * f * m;
+    let goal = start;
+    for (let r = 1; r <= rounds; r++) {
+      const digits = Game.parseDigits(goal, section);
+      const gDelta = Util.grain(goal, digits);     // last digit shown
+      const gDd = Util.grain(goal, digits + 1);    // one place below it
+      goal += Math.max(baseDelta, gDelta * T.DELTA_GRAIN_MIN)
+        + Math.max(baseDd, gDd * T.DD_GRAIN_MIN) * Math.max(0, r - 2);
     }
-    return Util.sig2(req);
+    return goal;
+  }
+
+  // ×10 per section once the run is past ENDLESS_AFTER_BOSS bosses; 1 before.
+  static endlessMag(section) {
+    return Math.pow(10, Math.max(0, section - CFG.WIN_BOSSES + 1));
+  }
+
+  // True once the run is into the endless sections.
+  get isEndless() {
+    return this.section >= CFG.WIN_BOSSES;
   }
 
   get isBossLevel() {
@@ -234,12 +381,9 @@ class Game {
   // --- Boss modifiers ---------------------------------------------------
 
   applyBoss() {
-    // Imperial difficulty draws its own boss pool once it has entries.
-    const roster = (this.difficulty === 4 && BOSSES_IMPERIAL.length > 0)
-      ? BOSSES_IMPERIAL : BOSSES;
-    const noRepeat = roster.filter((b) => b.id !== this.lastBossId);
-    const pool = noRepeat.length ? noRepeat : roster;
-    this.boss = pool[Math.floor(Math.random() * pool.length)];
+    // The boss was drawn when the section began (so the map could show it).
+    if (!this.sectionBoss) this.pickSectionBoss();
+    this.boss = this.sectionBoss;
     this.lastBossId = this.boss.id;
     this.bossState = {}; // per-round boss scratch (cursed spots, demanded tile, ...)
     this.bossUnregs = [];
@@ -263,6 +407,13 @@ class Game {
   reapplyBossHooks() {
     if (!this.boss) return;
     this.bossUnregs = this.bossUnregs || [];
+    // Silent per-letter setup, ahead of the slug's own machinery — it can mute
+    // a slug outright (The Critique striking off letters already played).
+    if (this.boss.letterSetup) {
+      this.bossUnregs.push(this.scoring.register('onLetterSetup',
+        (ctx, step) => this.boss.letterSetup(ctx, step, this, this.bossState),
+        100, { source: 'boss' }));
+    }
     // Letter rules run on the SILENT channel: they bend each letter's own
     // value before its count events are emitted.
     if (this.boss.letterHook) {
@@ -424,6 +575,7 @@ class Game {
     if (this.rerolls <= 0 || this.tray.length === 0) return false;
     const returned = this.tray.splice(0);
     this.roundRerolledA += returned.filter((t) => t.letter === 'A').length;
+    this.roundRerollsFired = (this.roundRerollsFired || 0) + 1; // Steady Hand quest
     this.rack.push(...this.deck.draw(returned.length));
     this.deck.toBag(returned);
     this.rerolls--;
@@ -560,6 +712,7 @@ class Game {
     this.plays--;
     this.roundScore += result.total;
     this.roundLongest = Math.max(this.roundLongest, result.word.length);
+    this.roundBestPlay = Math.max(this.roundBestPlay, result.total); // side-quests
 
     const repeat = this.runWords.has(result.word); // Errata's unlock condition
     this.runWords.add(result.word);
@@ -615,12 +768,21 @@ class Game {
     }
 
     let outcome = 'continue';
+    // Label Tax: driven far enough into debt, the run ends where it stands —
+    // ahead of any win, so you can't clear a level on borrowed tickets.
+    if (this.bankrupt) {
+      this.state = 'gameOver';
+      this.note('Label Tax calls in the debt — the run ends');
+      return { result, outcome: 'lost' };
+    }
     if (this.roundScore >= this.target) {
       // Round ends the moment the target is hit; leftover plays are unused —
       // but they're worth tickets. The payout is itemised for the win card.
       outcome = 'won';
       this.state = 'roundWon';
       if (this.isBossLevel) { this.stats.bossesBeaten++; this.bossesThisRun++; }
+      // A boss may still collect on the way out (The Big Question's toll).
+      if (this.boss && this.boss.onRoundWin) this.boss.onRoundWin(this, this.bossState);
       this.lastPayout = [
         { label: `Longest word — ${this.roundLongest} letters`,
           amount: this.roundLongest * CFG.TICKETS_PER_LETTER },
@@ -629,6 +791,22 @@ class Game {
       ];
       this.tickets += this.lastPayout[0].amount + this.lastPayout[1].amount;
       this.lastPayout.push(...this.books.onRoundWin()); // Books itemise themselves
+      // Side-quest settle-up: check the task, grant the prize. A prize that
+      // pays tickets is itemised alongside everything else.
+      this.questResult = null;
+      if (this.quest && this.questDef) {
+        const def = this.questDef, reward = this.questReward;
+        this.questDone = !!def.check(this);
+        if (this.questDone && reward) {
+          const before = this.tickets;
+          const msg = reward.grant(this);
+          const delta = this.tickets - before;
+          if (delta > 0) this.lastPayout.push({ label: `Side-quest — ${def.name}`, amount: delta });
+          this.questResult = { passed: true, name: def.name, msg };
+        } else {
+          this.questResult = { passed: false, name: def.name, msg: reward ? reward.desc : '' };
+        }
+      }
       this.lastTicketsEarned = this.lastPayout.reduce((sum, p) => sum + p.amount, 0);
       this.stats.ticketsEarnedTotal += this.lastTicketsEarned;
       this.books.dispatchGrow('roundWin', { wasBoss: this.isBossLevel }); // First Edition appreciates
@@ -690,6 +868,10 @@ class Game {
       deckId: this.deckDef.id,
       tickets: this.tickets,
       lastBossId: this.lastBossId,
+      sectionBossId: this.sectionBoss ? this.sectionBoss.id : null,
+      boons: this.boons,
+      bannedBooks: this.bannedBooks,
+      quest: this.quest, questDone: this.questDone, skipOffer: this.skipOffer,
       bossesThisRun: this.bossesThisRun,
       endless: this.endless,
       bookOutput: this.bookOutput,
@@ -730,6 +912,17 @@ class Game {
     this.level = data.level;
     this.tickets = data.tickets || 0;
     this.lastBossId = data.lastBossId || null;
+    this.sectionBoss = data.sectionBossId
+      ? (BOSSES.find((b) => b.id === data.sectionBossId)
+        || BOSSES_IMPERIAL.find((b) => b.id === data.sectionBossId) || null)
+      : null;
+    this.boons = data.boons || [];
+    this.bannedBooks = data.bannedBooks || [];
+    this.bankrupt = false;
+    this.quest = data.quest || null;
+    this.questDone = !!data.questDone;
+    this.skipOffer = data.skipOffer || null;
+    this.questResult = null;
     this.bossesThisRun = data.bossesThisRun || 0;
     this.endless = data.endless || false;
     this.bookOutput = data.bookOutput || {};
@@ -741,6 +934,8 @@ class Game {
     this.runYCount = data.runYCount || 0;
     this.runPensUsed = data.runPensUsed || 0;
     this.roundLetters = new Set(); // ephemeral round tracking; fresh on resume
+    this.roundBestPlay = 0;
+    this.roundRerollsFired = 0;
     this.freePurchase = false;
     this.stats = data.stats || { wordsForged: 0, bestWord: '—', bestScore: 0,
       bossesBeaten: 0, ticketsEarnedTotal: 0, tilesDestroyed: 0 };

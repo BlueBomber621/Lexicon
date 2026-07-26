@@ -23,14 +23,21 @@ class Shop {
     this.bags = this.pickBags(CFG.SHOP_BAG_OFFERS);
     this.consumables = this.pickConsumables(CFG.SHOP_CONSUMABLE_OFFERS);
     this.penPack = true; // one pen pack per shop visit
+    this.freeConsumable = null; // set by a Sundry Voucher boon
+    this.freePen = false;       // set by an Ink Requisition boon
+    // Slips taken for skipped stages cash in here (they stack: two of them may
+    // roll the same offer, e.g. a free Book that also arrives Donated).
+    this.game.consumeBoons('shop', this);
   }
 
   // Rarity-weighted draw of UNLOCKED Books the player doesn't own, no
   // duplicates. Each offer may roll a sticker (see STICKERS in content.js);
   // offers are { def, sticker } where sticker may be null.
   pickBooks(n) {
+    // Books The Purge burnt never come back this run.
     const pool = BOOKS.filter((b) =>
-      !this.game.books.owns(b.id) && this.game.unlocks.isUnlocked(b));
+      !this.game.books.owns(b.id) && this.game.unlocks.isUnlocked(b)
+      && !(this.game.bannedBooks || []).includes(b.id));
     const out = [];
     while (out.length < n && pool.length > 0) {
       const weighted = [];
@@ -61,9 +68,23 @@ class Shop {
     return STICKERS[weighted[Math.floor(Math.random() * weighted.length)]];
   }
 
-  // A Book offer's price after its sticker (Discount Sticker).
+  // A Book offer's price after its sticker (Discount Sticker). A Comp Copy
+  // Slip marks one offer free outright.
   bookCost(offer) {
-    return Math.max(1, offer.def.cost + (offer.sticker ? (offer.sticker.costDelta || 0) : 0));
+    if (offer.free) return 0;
+    // Postage (a Letter+ challenge) adds to every Book's price.
+    return Math.max(1, offer.def.cost + (offer.sticker ? (offer.sticker.costDelta || 0) : 0)
+      + this.game.challengeMod('bookCost'));
+  }
+
+  // A sundry's price — a Sundry Voucher marks one of them free.
+  consumableCost(index) {
+    return this.freeConsumable === index ? 0 : this.consumables[index].cost;
+  }
+
+  // The pen pack's price — an Ink Requisition makes it free.
+  penCost() {
+    return this.freePen ? 0 : CFG.PEN_PACK_COST;
   }
 
   // Distinct random tile-bag offers, rarity-weighted like Books.
@@ -135,9 +156,11 @@ class Shop {
   // PEN_CHOICES random pens. The UI collects one pick of each and calls
   // finalizePen(tile, pen).
   buyPenPack() {
-    if (!this.penPack || !this.canAfford(CFG.PEN_PACK_COST)) return false;
-    this.spend(CFG.PEN_PACK_COST);
+    const penCost = this.penCost();
+    if (!this.penPack || !this.canAfford(penCost)) return false;
+    this.spend(penCost);
     this.penPack = false;
+    this.freePen = false;
     this.game.progress('buy', { kind: 'pen' });
     const pool = this.game.deck.all.slice();
     const tiles = [];
@@ -205,9 +228,14 @@ class Shop {
 
   buyConsumable(index) {
     const def = this.consumables[index];
-    if (!def || !this.canAfford(def.cost)) return false;
+    if (!def) return false;
+    const cost = this.consumableCost(index);
+    if (!this.canAfford(cost)) return false;
     if (!this.game.addConsumable(def)) return false; // slots full
-    this.spend(def.cost);
+    this.spend(cost);
+    // The voucher is spent with its offer; later offers shift down by one.
+    if (this.freeConsumable === index) this.freeConsumable = null;
+    else if (this.freeConsumable > index) this.freeConsumable--;
     this.consumables.splice(index, 1);
     this.game.progress('buy', { kind: 'consumable' });
     return true;

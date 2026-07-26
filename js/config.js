@@ -44,44 +44,82 @@ const CFG = {
 
   // --- Progression ----------------------------------------------------
   // Targets run in BOSS_EVERY-level sections ending on a boss. Within a section
-  // the increment starts at DELTA and grows by DD each round (delta-delta);
-  // after each boss the next section starts at bossTarget × BOSS_MULT and
-  // DELTA/DD grow by their _GROWTH amounts. The whole sequence is computed in
-  // raw reals; as a FINAL step each round's requirement is rounded to 2
-  // significant figures (two leading digits, the rest zeroed). The run is WON
-  // on the WIN_BOSSES-th boss; past that, ENDLESS takes over. See Game.target.
+  // the increment starts at DELTA and grows by DD each round; after each boss
+  // the next section starts at bossTarget × BOSS_MULT, and DELTA/DD grow by
+  // DELTA_GROWTH/DD_GROWTH. There is ONE rounding rule: every goal is PARSED
+  // to PARSE_DIGITS digits (upper digits kept, the rest zeroed), and each
+  // level's increment is floored at the running goal's own grain so the parsed
+  // number always moves. The run is WON on the WIN_BOSSES-th boss; past that
+  // every further section lifts the whole curve another power of ten.
+  // Full math in Game.target.
   TARGET: {
+    // Tuned so a Note run peaks at a 10,000 goal on the last pre-endless boss
+    // (level 42) — that number is the endgame, not a mid-run checkpoint.
     START: 100,        // level 1 goal
-    DELTA: 60,         // first increment of section 1
-    DELTA_GROWTH: 24,  // delta increases per section
+    DELTA: 70,         // first increment of section 1
+    DELTA_GROWTH: 20,  // delta increases per section
     DD: 10,            // delta-delta of section 1
-    DD_GROWTH: 9,      // delta-delta increases per section
-    BOSS_MULT: 1.14,   // next section's start = last boss target × this
+    DD_GROWTH: 2,      // delta-delta increases per section
+    BOSS_MULT: 1.16,   // next section's start = last boss target × this
+    // Goals keep this many significant digits (upper kept, rest zeroed). Once
+    // a goal passes PARSE_LATE_ABOVE it switches to PARSE_DIGITS_LATE, so
+    // five-figure goals step in hundreds rather than snapping in thousands —
+    // triggered by SIZE, not by level, since a hard difficulty gets there much
+    // sooner. Endless returns to PARSE_DIGITS: those numbers are enormous and
+    // round is what reads well.
+    PARSE_DIGITS: 2,
+    PARSE_DIGITS_LATE: 3,
+    PARSE_LATE_ABOVE: 10000,
+    // Floors, so every level moves the goal by a decisive amount. DELTA is
+    // floored at this many of the LAST DIGIT THE PARSE SHOWS; DD at this many
+    // of the place ONE BELOW that, and DD only starts contributing from the
+    // third round of a section. Both floors track the parse depth — pinning
+    // them to a fixed digit made a 10x grain jump at each magnitude crossing,
+    // which spiked whole sections (and, before that, drove the entire curve).
+    DELTA_GRAIN_MIN: 2,
+    DD_GRAIN_MIN: 3,
   },
-  // Endless mode, after the WIN_BOSSES-th boss. Here DELTA/DD turn
-  // MULTIPLICATIVE: each level the requirement ×= a multiplier that itself
-  // grows every level, and each Endless boss multiplies it by BOSS_BONUS plus
-  // that multiplier. Still 2-sig-figure rounded. See Game._endlessTarget.
-  ENDLESS: {
-    DELTA_MULT: 1.5,        // per-level requirement multiplier at Endless start
-    DELTA_MULT_GROWTH: 0.2, // the multiplier grows by this each Endless level
-    BOSS_BONUS: 10,         // an Endless boss ×= BOSS_BONUS + current multiplier
+
+  // --- The simulator-tuned curve, kept to the side --------------------------
+  // The alternative balance pass, parked here so it's one swap away: paste
+  // these over TARGET above and restore Game._normalTarget/_endlessTarget to
+  // run it instead. Nothing reads this object.
+  TARGET_SIMULATOR_TUNED: {
+    START: 100, DELTA: 60, DELTA_GROWTH: 24, DD: 10, DD_GROWTH: 9, BOSS_MULT: 1.14,
+    // Its Endless was MULTIPLICATIVE rather than a per-section power of ten:
+    // each level ×= a multiplier that itself grows, and each Endless boss
+    // ×= BOSS_BONUS plus that multiplier.
+    ENDLESS: { DELTA_MULT: 1.5, DELTA_MULT_GROWTH: 0.2, BOSS_BONUS: 10 },
   },
+
   TICKETS_PER_LETTER: 2,    // tickets = longest word length that round × this
   TICKETS_PER_PLAY_LEFT: 2, // + this for each unused play at round end
   BOSS_EVERY: 6,            // every 6th level is a boss with a rule modifier
   WIN_BOSSES: 7,            // beating this many bosses WINS the run; beyond is Endless
   SHOP_EVERY: 2,            // the shop opens after every 2nd level cleared
 
+  // Within each 6-level section, two stages are special (1-based positions):
+  // Stage 4 is shop-due (SHOP_EVERY 2), so waving it off costs you the Foundry
+  // visit that would have followed as well as the level's tickets.
+  SKIP_ROUND: 4,   // stage 4 offers to be skipped in exchange for a slip (boon)
+  QUEST_ROUND: 5,  // stage 5 carries an optional side-quest with a reward
+  // A "score X in one play" quest asks for this fraction of the level's target.
+  QUEST_BIG_PLAY: 0.6,
+
   // Difficulties, named for paper sizes. `mult` scales the target curve's
   // DELTA / DD (and their growths); START and the rounding rules are shared.
-  // Imperial draws from BOSSES_IMPERIAL when that pool has entries.
+  // Deliberately gentler than a raw ladder, because each step up also carries
+  // its own rule modifiers — the score goal is only half of what makes a paper
+  // size hard.
+  // `challenge` names the standing rule modifier this size ADDS; a run carries
+  // its own challenge plus every one below it (see CHALLENGES in content.js).
+  // Note is clean — nothing but the numbers.
   DIFFICULTIES: [
-    { id: 'note', name: 'Note', mult: 1, icon: 'icon-diff-note' },
-    { id: 'letter', name: 'Letter', mult: 1.5, icon: 'icon-diff-letter' },
-    { id: 'demy', name: 'Demy', mult: 2.5, icon: 'icon-diff-demy' },
-    { id: 'royal', name: 'Royal', mult: 4, icon: 'icon-diff-royal' },
-    { id: 'imperial', name: 'Imperial', mult: 8, icon: 'icon-diff-imperial' },
+    { id: 'note', name: 'Note', mult: 1, icon: 'icon-diff-note', challenge: null },
+    { id: 'letter', name: 'Letter', mult: 1.5, icon: 'icon-diff-letter', challenge: 'postage' },
+    { id: 'demy', name: 'Demy', mult: 2, icon: 'icon-diff-demy', challenge: 'short-measure' },
+    { id: 'royal', name: 'Royal', mult: 3, icon: 'icon-diff-royal', challenge: 'rationed-ink' },
+    { id: 'imperial', name: 'Imperial', mult: 5, icon: 'icon-diff-imperial', challenge: 'wildfire' },
   ],
 
   // Sticker odds: chance a shop Book carries one, then rarity weights

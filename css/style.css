@@ -1939,3 +1939,230 @@ body {
 @media (max-width: 860px) {
   .continue-row { flex-direction: column; align-items: stretch; gap: 8px; text-align: center; }
 }
+
+/* ---- Charring Bosses (Wildfire) ---------------------------------------- */
+/* The torn seal burns: a bright ember bloom under the dark red stamp, with a
+   slow flicker so it never sits still. */
+@keyframes ember-flicker {
+  0%, 100% { filter: drop-shadow(0 0 4px #ff7a18) drop-shadow(0 0 11px rgba(255, 110, 0, 0.55)); }
+  50%      { filter: drop-shadow(0 0 7px #ff9430) drop-shadow(0 0 18px rgba(255, 130, 20, 0.75)); }
+}
+.boss-charred svg, .map-charred .map-flag svg {
+  animation: ember-flicker 2.2s ease-in-out infinite;
+}
+.panel.boss.panel-charred {
+  border-color: #c2140c;
+  box-shadow: 0 0 14px rgba(194, 20, 12, 0.4), inset 0 0 22px rgba(255, 110, 0, 0.09);
+}
+.panel-charred .boss-name { color: #ff8c1a; }
+.map-node.map-charred .map-dot { border-color: #c2140c; }
+.map-node.map-charred { color: #ff8c1a; }
+
+@media (prefers-reduced-motion: reduce) {
+  .boss-charred svg, .map-charred .map-flag svg {
+    animation: none !important;
+    filter: drop-shadow(0 0 6px #ff7a18);
+  }
+}
+
+/* ---- Difficulty challenge cards (under the paper-size picker) ----------- */
+.chal-list { display: flex; flex-direction: column; gap: 7px; margin: 10px 0 4px; }
+
+.chal-lead {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: #6b6250;
+  text-transform: uppercase;
+}
+
+.chal-none {
+  font-size: 11.5px;
+  font-style: italic;
+  color: #6b6250;
+  margin: 10px 0 4px;
+}
+
+.chal-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--chal, var(--brass));
+  border-left: 5px solid var(--chal, var(--brass));
+  border-radius: 3px;
+  background: var(--paper-2);
+  padding: 8px 11px;
+}
+
+.chal-icon { flex-shrink: 0; color: var(--chal, var(--brass)); line-height: 0; }
+.chal-icon svg { width: 30px; height: 30px; display: block; }
+
+.chal-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.15;
+  color: var(--chal, var(--ink));
+}
+
+.chal-desc { font-size: 11px; line-height: 1.45; color: var(--ink); margin-top: 1px; }
+
+@media (max-width: 860px) {
+  .chal-icon svg { width: 24px; height: 24px; }
+  .chal-title { font-size: 12.5px; }
+  .chal-desc { font-size: 10px; }
+}
+
+/* ---- The section map --------------------------------------------------- */
+/* Six stages of the current run of the press, left→right, with the boss's
+   seal at the end. Cleared stages dim, the live one is ringed in copper. */
+/* Six stages stepping up and down the page. Each stage carries a FLAG above
+   its point (skip / quest / boss seal) and a Foundry mark below it when a
+   shop follows that stage. */
+#section-map {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 7px;
+  padding: 9px 0 7px; /* room for the zig-zag offsets */
+}
+
+.map-node {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--paper-dim);
+}
+/* The zig-zag: alternate stages sit high and low. */
+.map-node.zig-a { transform: translateY(-7px); }
+.map-node.zig-b { transform: translateY(7px); }
+
+/* ABOVE the point — what this stage carries. */
+.map-flag {
+  height: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+}
+.map-flag svg { width: 17px; height: 17px; display: block; }
+
+/* The point itself. */
+.map-dot {
+  width: 100%;
+  position: relative;
+  text-align: center;
+  font-size: 8px;
+  letter-spacing: 0.5px;
+  padding: 3px 0;
+  border: 1px solid var(--brass-dark);
+  border-radius: 3px;
+  background: var(--ink);
+}
+
+/* BELOW the point — a Foundry visit follows this stage. */
+.map-shop {
+  height: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--copper);
+}
+.map-shop svg { width: 13px; height: 13px; display: block; }
+
+/* Stage kinds tint the flag and ring the point. */
+.map-node.map-skip { color: var(--verdigris); }
+.map-node.map-quest { color: var(--gold); }
+.map-node.map-boss { color: var(--press-red); }
+.map-node.map-skip .map-dot { border-color: var(--verdigris); }
+.map-node.map-quest .map-dot { border-color: var(--gold); }
+.map-node.map-boss .map-dot { border-color: var(--press-red); }
+
+/* Where you are, and what you've already run off. */
+.map-node.map-done { opacity: 0.4; }
+.map-node.map-now .map-dot {
+  background: var(--ink-3);
+  color: var(--copper-hot);
+  box-shadow: 0 0 0 2px var(--copper-hot), 0 0 10px rgba(237, 168, 95, 0.35);
+}
+.map-node.map-done .map-dot::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ink);
+  border-radius: 2px;
+  font-size: 10px;
+  color: var(--verdigris);
+}
+
+/* ---- Side-quest plaque -------------------------------------------------- */
+.panel.quest { border-color: var(--gold); box-shadow: 0 0 12px rgba(212, 160, 23, 0.18); }
+.panel-label.quest-label { color: var(--gold); }
+.quest-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--gold);
+  line-height: 1.15;
+}
+.quest-reward {
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: var(--copper-hot);
+  margin-top: 4px;
+  border-top: 1px dotted var(--brass-dark);
+  padding-top: 4px;
+}
+.panel.quest.quest-done { border-color: var(--verdigris); box-shadow: 0 0 12px rgba(79, 174, 150, 0.25); }
+.panel.quest.quest-done .quest-name { color: var(--verdigris); }
+
+/* ---- Overlay: two-button footer + skip offer / quest lines -------------- */
+.ov-buttons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+.skip-boon {
+  border: 2px dashed var(--brass);
+  border-radius: 4px;
+  background: var(--paper-2);
+  padding: 12px 14px;
+  margin: 12px 0;
+  text-align: left;
+}
+.skip-boon .skip-boon-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 3px;
+}
+.skip-cost { font-size: 11px; color: #8f6a3a; font-style: italic; margin-top: 8px; }
+
+.ov-quest {
+  border-top: 1px dotted #b3a88e;
+  margin-top: 10px;
+  padding-top: 8px;
+  font-size: 12px;
+}
+.ov-quest.ok { color: #2f7d68; }
+.ov-quest.no { color: #9a6b5e; }
+
+/* Standing slips waiting to cash in (sidebar list). */
+.boon-row { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--copper-hot); }
+.boon-row .slip-icon svg { width: 13px; height: 13px; }
+
+@media (max-width: 860px) {
+  #map-panel { min-width: 220px; }
+  #section-map { gap: 2px; padding: 7px 0 5px; }
+  .map-flag { height: 14px; font-size: 9px; }
+  .map-flag svg { width: 14px; height: 14px; }
+  .map-shop { height: 12px; }
+  .map-shop svg { width: 11px; height: 11px; }
+  .map-node.zig-a { transform: translateY(-5px); }
+  .map-node.zig-b { transform: translateY(5px); }
+  .quest-name { font-size: 12px; }
+  #quest-panel { max-width: 190px; }
+}

@@ -220,6 +220,97 @@ it and bump the "through entry NNN".
   material+Red slug do not.
 - **[commit]:** d7bc8c3
 
+### 016 — 2026-07-21 — Skippable stages, side-quests, and the section map
+- **File:** `js/config.js` (`SKIP_ROUND`, `QUEST_ROUND`, `QUEST_BIG_PLAY`),
+  `js/content.js` (`BOONS`, `SIDE_QUESTS`, `QUEST_REWARDS`), `js/game.js`
+  (section helpers, `pickSectionBoss`, `skipLevel`, `addBoon`/`consumeBoons`,
+  quest roll + settle, round tracking, save/resume), `js/shop.js` (boon
+  consumption in `stock`, `consumableCost`/`penCost`, free-offer handling),
+  `js/ui.js` (`renderMap`, `renderQuest`, skip overlay + `onOverlaySecondary`,
+  quest line on the win card, boons in the sidebar, FREE labels),
+  `css/style.css` (map, quest plaque, two-button overlay), `index.html`
+  (map + quest panels, `#ov-btn2`)
+- **What:** Stage 3 of each section can be skipped for a **slip** (a standing
+  boon that auto-fires when it can — slips stack, e.g. free + donated on the
+  same Book). Stage 5 carries an optional **side-quest** (8 tasks × 7 rewards,
+  both shown up front). A **section map** shows all six stages and the boss's
+  seal — bosses are now drawn at the section's first stage so they can be
+  telegraphed.
+- **Why:** Requested. Verified headless end-to-end; no JS errors.
+- **[commit]:** 2f444da
+
+### 017 — 2026-07-21 — Skip on stage 4, map markers/zig-zag, Service Nomination
+- **File:** `js/config.js` (`SKIP_ROUND` 3→4), `js/ui.js` (`renderMap` rewrite,
+  skip-overlay copy, `slipRefusal`), `css/style.css` (map flag/dot/shop layout,
+  zig-zag), `index.html` (`#icon-map-shop`, `#icon-slip-nomination`, **sprite
+  fix**), `js/content.js` (Service Nomination sundry)
+- **What:** Skip moved to stage 4 so it also costs the Foundry visit after it.
+  Map restructured — flag **above** each point (skip/quest/boss seal), Foundry
+  mark **below** the shop stages, stages zig-zag up and down. New sundry
+  **Service Nomination** (cost 7, weight 5): pins a random side-quest + reward
+  onto a level with none; refuses on one that already has a quest.
+- **⚠ Bug fixed:** a stray `</defs></svg>` (introduced in edit 014) was closing
+  the sprite early, orphaning **every boss seal, all 14 expansion Book covers,
+  and the achievement emblems** outside the SVG — they silently never rendered.
+  Sprite is one well-formed block again; that art is restored.
+- **Why:** Requested. Verified headless; all three suites pass, no JS errors.
+- **[commit]:** 3818dc9
+
+### 018 — 2026-07-21 — Target curve: parse-2, endless mode, softer difficulty mults
+- **File:** `js/util.js` (`parse`, `grain`), `js/config.js` (`PARSE_DIGITS`,
+  `ENDLESS_AFTER_BOSS`, DIFFICULTIES mults), `js/game.js` (`target` rewritten,
+  `walkSection`, `endlessMag`, `isEndless`)
+- **What:** Removed the two-magnitude ladder (`ceilMag`/`nearMag`). One rule now:
+  goals are **parsed to 2 significant digits**. Each level's increment is
+  **floored at the running goal's grain** so the number always moves. Endless
+  mode after the **7th boss (level 42)**: every further section ×10s DELTA/DD.
+  Difficulty mults softened **1/1.5/2.5/4/8 → 1/1.5/2/3/5**.
+- **⚠ Bug fixed:** the old rounding produced **identical targets on consecutive
+  levels** (Note 25/26, 27/28, 28/29, 31/32, 33/34, 35/36; Royal 19, 25), and
+  post-boss jumps overshot BOSS_MULT badly (+43% at L18→19, +122% at L30→31).
+  Now +17–27% everywhere, zero flat spots, strictly increasing.
+- **Why:** Requested. Boss-level goals drop ~0% (Note) to ~40% (Imperial) — the
+  slack is meant for per-difficulty rule modifiers next.
+- **Verified:** live engine matches an independent model of the formula EXACTLY
+  across all 5 difficulties, levels 1–72; all gameplay suites pass; no JS errors.
+- **[commit]:** 9595429
+
+### 019 — 2026-07-21 — Curve: size-triggered parse-3, decisive increments
+- **File:** `js/config.js` (`PARSE_LATE_ABOVE`), `js/game.js`, `js/util.js`
+- **What:** Parse-3 now triggers on the goal's SIZE (>10k), not the section, and
+  increments are floored so goals move decisively.
+- **⚠ Fixed:** Royal's L24 was ballooning to 30,000 (3.5× in one section).
+- **[commit]:** ab087a8
+
+### 020 — 2026-07-21 — Curve nerf: Note peaks at 10k
+- **File:** `js/config.js`, `js/game.js`
+- **What:** Note's last pre-endless boss is now exactly 10,000 (was 20,000).
+  DELTA 60→70, DELTA_GROWTH 40→20, DD_GROWTH 15→2, BOSS_MULT 1.2→1.16. DD floors
+  one digit below delta's and starts from round 3; both floors track parse depth.
+- **⚠ Fixed:** the grain floors — not DELTA/DD — had been driving the whole
+  curve, causing a +55% single step and 2.4× sections at magnitude crossings.
+- **[commit]:** c26abad
+
+### 021 — 2026-07-21 — Stacking difficulty challenges
+- **File:** `js/content.js` (`CHALLENGES`), `js/config.js`, `js/game.js`,
+  `js/shop.js`, `js/ui.js`, `css/style.css`, `index.html`
+- **What:** Each paper size above Note adds a standing rule, cumulative:
+  Letter **Postage** (Books +1 ticket), Demy **Short Measure** (−1 hand slug),
+  Royal **Rationed Ink** (−1 reroll). Shown as themed cards under the picker.
+- **[commit]:** 6a87070
+
+### 022 — 2026-07-21 — Wildfire + the nine Charring Bosses
+- **File:** `index.html` (charred seal + 9 emblems), `js/content.js`
+  (`BOSSES_IMPERIAL`), `js/game.js`, `js/scoring.js`, `js/shop.js`, `js/ui.js`,
+  `css/style.css`
+- **What:** Imperial's crimson **Wildfire** replaces every boss with a Charring
+  Boss on a new torn, ember-glowing seal: The Purge, Label Tax, The Critique,
+  The Post, The Big Question, The Scribble, The Clock, Magic Trick, The Zero One.
+- **New hooks:** boss `letterSetup`, `step.noBooks` (a muted slug skips
+  letter-Books too), `goalMult`, `forcePlays`, boss `onRoundWin`, banned-Book
+  list, bankruptcy flag.
+- **[commit]:** 5971966
+
 <!--
 ENTRY TEMPLATE (copy for each new edit):
 
