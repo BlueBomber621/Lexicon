@@ -1726,6 +1726,31 @@ body {
   .continue-row { flex-direction: column; align-items: stretch; gap: 8px; text-align: center; }
 }
 
+/* ---- Charring Bosses (Wildfire) ---------------------------------------- */
+/* The torn seal burns: a bright ember bloom under the dark red stamp, with a
+   slow flicker so it never sits still. */
+@keyframes ember-flicker {
+  0%, 100% { filter: drop-shadow(0 0 4px #ff7a18) drop-shadow(0 0 11px rgba(255, 110, 0, 0.55)); }
+  50%      { filter: drop-shadow(0 0 7px #ff9430) drop-shadow(0 0 18px rgba(255, 130, 20, 0.75)); }
+}
+.boss-charred svg, .map-charred .map-flag svg {
+  animation: ember-flicker 2.2s ease-in-out infinite;
+}
+.panel.boss.panel-charred {
+  border-color: #c2140c;
+  box-shadow: 0 0 14px rgba(194, 20, 12, 0.4), inset 0 0 22px rgba(255, 110, 0, 0.09);
+}
+.panel-charred .boss-name { color: #ff8c1a; }
+.map-node.map-charred .map-dot { border-color: #c2140c; }
+.map-node.map-charred { color: #ff8c1a; }
+
+@media (prefers-reduced-motion: reduce) {
+  .boss-charred svg, .map-charred .map-flag svg {
+    animation: none !important;
+    filter: drop-shadow(0 0 6px #ff7a18);
+  }
+}
+
 /* ---- Difficulty challenge cards (under the paper-size picker) ----------- */
 .chal-list { display: flex; flex-direction: column; gap: 7px; margin: 10px 0 4px; }
 

@@ -53,6 +53,8 @@ class Game {
     this.books.clear();
     this.consumables = [];
     this.boons = [];           // standing slips waiting for their moment
+    this.bannedBooks = [];     // Books burnt out of the run (The Purge)
+    this.bankrupt = false;     // Label Tax drove you past the debt limit
     this.sectionBoss = null;   // this section's boss, known from its first stage
     this.lastBossId = null;
     this.runWords = new Set(); // every word forged this run (Errata's unlock)
@@ -126,6 +128,9 @@ class Game {
     this.books.onRoundStart();              // roundStart Books apply last
     this.plays = Math.max(1, this.plays);   // Incunabula etc. can't zero you out
     this.rerolls = Math.max(0, this.rerolls);
+    // A boss may pin the play count outright, after Books have had their say
+    // (The Post's single play can't be talked up by Overtime).
+    if (this.boss && this.boss.forcePlays) this.plays = this.boss.forcePlays;
     this.consumeBoons('any');               // standing slips fire when they can
     this.state = 'playing'; // 'playing' | 'roundWon' | 'gameOver'
   }
@@ -182,7 +187,9 @@ class Game {
   // Draw this section's boss up front (no immediate repeat), so the map can
   // show its seal from the section's first stage.
   pickSectionBoss() {
-    const roster = (this.difficulty === 4 && BOSSES_IMPERIAL.length > 0)
+    // Wildfire (the Imperial challenge) replaces the whole roster with the
+    // Charring Bosses.
+    const roster = (this.challengeMod('charredBosses') > 0 && BOSSES_IMPERIAL.length > 0)
       ? BOSSES_IMPERIAL : BOSSES;
     const noRepeat = roster.filter((b) => b.id !== this.lastBossId);
     const pool = noRepeat.length ? noRepeat : roster;
@@ -259,7 +266,11 @@ class Game {
       start = Util.parse(raw, Game.parseDigits(raw, s + 1));
     }
     const raw = this.walkSection(start, section, f, round);
-    return Util.parse(raw, Game.parseDigits(raw, section));
+    const goal = Util.parse(raw, Game.parseDigits(raw, section));
+    // A boss may bend this level's goal (The Post halves it).
+    const gm = this.boss && this.boss.goalMult;
+    if (!gm) return goal;
+    return Math.max(1, Util.parse(goal * gm, Game.parseDigits(goal * gm, section)));
   }
 
   // How many significant digits a goal keeps: two while goals are small,
@@ -342,6 +353,13 @@ class Game {
   reapplyBossHooks() {
     if (!this.boss) return;
     this.bossUnregs = this.bossUnregs || [];
+    // Silent per-letter setup, ahead of the slug's own machinery — it can mute
+    // a slug outright (The Critique striking off letters already played).
+    if (this.boss.letterSetup) {
+      this.bossUnregs.push(this.scoring.register('onLetterSetup',
+        (ctx, step) => this.boss.letterSetup(ctx, step, this, this.bossState),
+        100, { source: 'boss' }));
+    }
     // Letter rules run on the SILENT channel: they bend each letter's own
     // value before its count events are emitted.
     if (this.boss.letterHook) {
@@ -695,12 +713,21 @@ class Game {
     }
 
     let outcome = 'continue';
+    // Label Tax: driven far enough into debt, the run ends where it stands —
+    // ahead of any win, so you can't clear a level on borrowed tickets.
+    if (this.bankrupt) {
+      this.state = 'gameOver';
+      this.note('Label Tax calls in the debt — the run ends');
+      return { result, outcome: 'lost' };
+    }
     if (this.roundScore >= this.target) {
       // Round ends the moment the target is hit; leftover plays are unused —
       // but they're worth tickets. The payout is itemised for the win card.
       outcome = 'won';
       this.state = 'roundWon';
       if (this.isBossLevel) { this.stats.bossesBeaten++; this.bossesThisRun++; }
+      // A boss may still collect on the way out (The Big Question's toll).
+      if (this.boss && this.boss.onRoundWin) this.boss.onRoundWin(this, this.bossState);
       this.lastPayout = [
         { label: `Longest word — ${this.roundLongest} letters`,
           amount: this.roundLongest * CFG.TICKETS_PER_LETTER },
@@ -754,6 +781,7 @@ class Game {
       lastBossId: this.lastBossId,
       sectionBossId: this.sectionBoss ? this.sectionBoss.id : null,
       boons: this.boons,
+      bannedBooks: this.bannedBooks,
       quest: this.quest, questDone: this.questDone, skipOffer: this.skipOffer,
       bossesThisRun: this.bossesThisRun,
       runWords: [...this.runWords],
@@ -794,6 +822,8 @@ class Game {
         || BOSSES_IMPERIAL.find((b) => b.id === data.sectionBossId) || null)
       : null;
     this.boons = data.boons || [];
+    this.bannedBooks = data.bannedBooks || [];
+    this.bankrupt = false;
     this.quest = data.quest || null;
     this.questDone = !!data.questDone;
     this.skipOffer = data.skipOffer || null;

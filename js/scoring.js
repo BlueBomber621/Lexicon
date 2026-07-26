@@ -177,8 +177,12 @@ class ScoringEngine {
     }
 
     // Letter-trigger Books fire on this letter, in shelf order — the Book
-    // takes the credit (and emits its own events).
-    for (const h of this.hooks.onLetterScored) h.fn(ctx, step);
+    // takes the credit (and emits its own events). A setup hook may set
+    // step.noBooks (The Critique's struck letters) to skip them entirely, so
+    // the slug contributes nothing at all beyond its place in the word.
+    if (!step.noBooks) {
+      for (const h of this.hooks.onLetterScored) h.fn(ctx, step);
+    }
     return step;
   }
 }

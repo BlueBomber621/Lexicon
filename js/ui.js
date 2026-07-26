@@ -110,7 +110,8 @@ class UI {
       const isSkip = n === CFG.SKIP_ROUND;
       const isQuest = n === CFG.QUEST_ROUND;
       const hasShop = level % CFG.SHOP_EVERY === 0; // a Foundry follows this stage
-      const kind = isBoss ? 'map-boss' : isSkip ? 'map-skip' : isQuest ? 'map-quest' : '';
+      const charred = isBoss && g.sectionBoss && g.sectionBoss.charred ? ' map-charred' : '';
+      const kind = (isBoss ? 'map-boss' : isSkip ? 'map-skip' : isQuest ? 'map-quest' : '') + charred;
       const state = n < here ? 'map-done' : (n === here ? 'map-now' : '');
       const zig = n % 2 ? 'zig-a' : 'zig-b'; // the press steps up and down
 
@@ -230,6 +231,9 @@ class UI {
       this.els['boss-desc'].textContent = g.boss.desc;
       this.els['boss-seal'].innerHTML =
         `<svg viewBox="0 0 48 48"><use href="#${g.boss.icon}"/></svg>`;
+      // Charring Bosses burn: the seal gets the ember glow.
+      this.els['boss-seal'].classList.toggle('boss-charred', !!g.boss.charred);
+      this.els['boss-panel'].classList.toggle('panel-charred', !!g.boss.charred);
     }
   }
 

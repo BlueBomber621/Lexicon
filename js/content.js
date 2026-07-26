@@ -872,7 +872,107 @@ const PENS = [
 // The 5th difficulty draws from this pool once it has entries (falls back to
 // BOSSES while empty). Same hook contract as BOSSES.
 
-const BOSSES_IMPERIAL = [];
+// The Wildfire pool. Same hook contract as BOSSES, plus:
+//   letterSetup(ctx, step, game, state) — SILENT, runs before the slug's own
+//        machinery; may set step.mute (no points/material/alteration) and
+//        step.noBooks (letter-trigger Books skip it entirely).
+//   goalMult   — scales this level's goal
+//   forcePlays — pins the play count, after Books have had their say
+//   onRoundWin(game, state) — fires when the level is cleared
+// Every seal is drawn on #charred-seal-base and marked `charred` so the UI
+// gives it the burning glow.
+
+const BOSSES_IMPERIAL = [
+
+  { id: 'the-purge', name: 'The Purge', icon: 'icon-boss-the-purge', charred: true,
+    desc: 'Incinerates one of your Books at the start of the round — it never returns to the Foundry this run.',
+    onRoundStart: (game, state) => {
+      const shelf = game.books.shelf;
+      if (shelf.length === 0) return;
+      const victim = shelf[Math.floor(Math.random() * shelf.length)];
+      game.books.remove(victim.id);
+      game.bannedBooks.push(victim.id); // the ashes never restock
+      game.note(`The Purge incinerates ${victim.name}`);
+    } },
+
+  { id: 'label-tax', name: 'Label Tax', icon: 'icon-boss-label-tax', charred: true,
+    desc: 'Every material and alteration on a scoring slug costs 1 ticket. At −5 tickets the run ends.',
+    letterHook: (ctx, step, game) => {
+      if (!ctx.commit) return; // previews must not tax
+      const marks = (step.tile.variant ? 1 : 0) + (step.tile.alteration ? 1 : 0);
+      if (!marks) return;
+      game.tickets -= marks;
+      if (game.tickets <= -5) game.bankrupt = true; // forge() ends the run
+    } },
+
+  { id: 'the-critique', name: 'The Critique', icon: 'icon-boss-the-critique', charred: true,
+    desc: 'Every letter you play is struck off. Struck letters score nothing for the rest of the level — not even for Books — and count only toward word length.',
+    onRoundStart: (game, state) => { state.used = ''; },
+    // Muted AND silenced: the slug contributes nothing but its place in the word.
+    letterSetup: (ctx, step, game, state) => {
+      const spells = step.spells || step.tile.letter;
+      if ([...spells].some((c) => (state.used || '').includes(c))) {
+        step.mute = true;
+        step.noBooks = true;
+      }
+    },
+    afterForge: (game, played, state) => {
+      for (const c of (game.lastWord || '')) {
+        if (!state.used.includes(c)) state.used += c;
+      }
+    } },
+
+  { id: 'the-post', name: 'The Post', icon: 'icon-boss-the-post', charred: true,
+    desc: 'Half the usual goal — but you get a single play to reach it.',
+    goalMult: 0.5,
+    forcePlays: 1 },
+
+  { id: 'the-big-question', name: 'The Big Question', icon: 'icon-boss-the-big-question', charred: true,
+    desc: 'Forge a word of 8+ letters this level, or lose half your Books at random and every ticket you hold.',
+    onRoundWin: (game) => {
+      if (game.roundLongest >= 8) return;
+      const n = Math.ceil(game.books.shelf.length / 2);
+      for (let i = 0; i < n; i++) {
+        const shelf = game.books.shelf;
+        if (shelf.length === 0) break;
+        game.books.remove(shelf[Math.floor(Math.random() * shelf.length)].id);
+      }
+      game.tickets = 0;
+      game.note(`The Big Question burns ${n} Book${n === 1 ? '' : 's'} and every ticket`);
+    } },
+
+  { id: 'the-scribble', name: 'The Scribble', icon: 'icon-boss-the-scribble', charred: true,
+    desc: 'Slugs score nothing unless the word uses 5 or more different letters.',
+    letterHook: (ctx, step) => {
+      if (new Set(ctx.word).size < 5) step.pts = 0;
+    } },
+
+  { id: 'the-clock', name: 'The Clock', icon: 'icon-boss-the-clock', charred: true,
+    desc: 'Your mult is divided by the plays you have left — the later the word, the better it prints.',
+    wordHook: (ctx, game) => { ctx.mult /= Math.max(1, game.plays); } },
+
+  { id: 'magic-trick', name: 'Magic Trick', icon: 'icon-boss-magic-trick', charred: true,
+    desc: 'Every slug you draw is recast as a random letter. Its material and alteration are untouched.',
+    onRoundStart: (game, state) => { state.done = []; },
+    onDraw: (game, state) => {
+      for (const t of game.rack) {
+        if (state.done.includes(t.id)) continue;
+        state.done.push(t.id);
+        t.letter = ALL_LETTERS[Math.floor(Math.random() * ALL_LETTERS.length)];
+        t.value = CFG.TILE_VALUES[t.letter];
+      }
+    } },
+
+  { id: 'the-zero-one', name: 'The Zero One', icon: 'icon-boss-the-zero-one', charred: true,
+    desc: 'Words must alternate consonant and vowel — no two vowels and no two consonants may touch.',
+    validWord: (word) => {
+      const isV = (c) => 'AEIOU'.includes(c);
+      for (let i = 1; i < word.length; i++) {
+        if (isV(word[i]) === isV(word[i - 1])) return false;
+      }
+      return true;
+    } },
+];
 
 // --- Bosses (blind-style rule modifiers, every 6th level) ----------------
 // Equal-weight debuffs, each bending a different aspect of play. Picked at
@@ -1279,6 +1379,10 @@ const CHALLENGES = [
   { id: 'rationed-ink', name: 'Rationed Ink', icon: 'icon-chal-rationed-ink', color: '#b06a2f',
     desc: 'One fewer reroll every round.',
     mods: { rerollsDelta: -1 } },
+
+  { id: 'wildfire', name: 'Wildfire', icon: 'icon-chal-wildfire', color: '#c2140c',
+    desc: 'Every boss is replaced by a Charring Boss — the seals come torn and burning.',
+    mods: { charredBosses: 1 } },
 ];
 
 // --- Boons (the slips you take instead of running a stage) -----------------

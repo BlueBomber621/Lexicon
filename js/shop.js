@@ -33,8 +33,10 @@ class Shop {
   // duplicates. Each offer may roll a sticker (see STICKERS in content.js);
   // offers are { def, sticker } where sticker may be null.
   pickBooks(n) {
+    // Books The Purge burnt never come back this run.
     const pool = BOOKS.filter((b) =>
-      !this.game.books.owns(b.id) && this.game.unlocks.isUnlocked(b));
+      !this.game.books.owns(b.id) && this.game.unlocks.isUnlocked(b)
+      && !(this.game.bannedBooks || []).includes(b.id));
     const out = [];
     while (out.length < n && pool.length > 0) {
       const weighted = [];

@@ -106,7 +106,7 @@ const CFG = {
     { id: 'letter', name: 'Letter', mult: 1.5, icon: 'icon-diff-letter', challenge: 'postage' },
     { id: 'demy', name: 'Demy', mult: 2, icon: 'icon-diff-demy', challenge: 'short-measure' },
     { id: 'royal', name: 'Royal', mult: 3, icon: 'icon-diff-royal', challenge: 'rationed-ink' },
-    { id: 'imperial', name: 'Imperial', mult: 5, icon: 'icon-diff-imperial', challenge: null },
+    { id: 'imperial', name: 'Imperial', mult: 5, icon: 'icon-diff-imperial', challenge: 'wildfire' },
   ],
 
   // Sticker odds: chance a shop Book carries one, then rarity weights
