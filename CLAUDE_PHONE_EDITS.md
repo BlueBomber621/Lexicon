@@ -23,6 +23,27 @@ All phone-session work lands on: `claude/file-review-jdleyy`
 
 ---
 
+## ⚠️ Reconcile hazard — watch the SVG sprite
+
+Merging phone edits with a desktop overhaul has **silently broken the icon
+sprite** before. Every `#icon-*` symbol lives in one hidden
+`<svg><defs>…</defs></svg>` at the top of `index.html`. A bad reconcile once
+left a **stray `</defs></svg>` in the middle of it**, closing the sprite early.
+Every `<symbol>` after the break was re-parsed into the HTML (XHTML) namespace,
+so `<use>` drew nothing — the 14 new Book covers, all boss seals and the
+achievement emblems rendered **blank** (name/effect text only), with **no
+console error** to flag it.
+
+If icons render blank after a reconcile:
+- There must be **exactly one** `<svg …>` open and one matching `</svg>` around
+  the sprite. `grep -n '<svg\|</svg>' index.html` — two closes for one open
+  means the sprite was split; delete the stray middle pair.
+- Live check: a broken symbol's `namespaceURI` ends in `xhtml` instead of
+  `svg` — e.g. `document.getElementById('icon-book-digraph').namespaceURI`.
+- This exact break was fixed in `git 2f4d515`.
+
+---
+
 ## Log
 
 ### 001 — 2026-07-19 — Session start

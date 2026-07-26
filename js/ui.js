@@ -15,13 +15,13 @@ class UI {
 
     // Cache every element we touch once.
     const ids = [
-      'table',
+      'table', 'playfield',
       'stat-level', 'stat-target', 'stat-score', 'stat-plays', 'stat-rerolls',
       'stat-tickets', 'stat-bag', 'stat-discard', 'target-fill', 'stat-difficulty',
       'boss-panel', 'boss-name', 'boss-desc', 'boss-seal',
       'section-map', 'quest-panel', 'quest-name', 'quest-desc', 'quest-reward',
       'ov-btn2',
-      'shelf', 'shelf-count', 'cons-list',
+      'shelf', 'shelf-count', 'cons-list', 'bin-area', 'bin',
       'penpick', 'penpick-card',
       'ro-word', 'ro-math', 'ro-points', 'ro-mult', 'ro-eq', 'ro-total',
       'stick', 'rack', 'tray', 'btn-forge', 'btn-reroll', 'btn-shuffle', 'btn-clear',
@@ -31,7 +31,8 @@ class UI {
       'btn-bagcheck', 'bagcheck', 'bagcheck-card',
       'picker', 'picker-card',
       'deckpick', 'deckpick-card',
-      'hovertip', 'btn-reset', 'reset', 'reset-card', 'hint',
+      'winscreen', 'winscreen-card',
+      'hovertip', 'cardmenu', 'btn-reset', 'reset', 'reset-card', 'hint',
     ];
     this.els = {};
     for (const id of ids) this.els[id] = document.getElementById(id);
@@ -58,10 +59,16 @@ class UI {
     });
     this.els['picker-card'].addEventListener('click', (e) => this.onPickerClick(e));
     this.els['deckpick-card'].addEventListener('click', (e) => this.onDeckPickClick(e));
+    this.els['winscreen-card'].addEventListener('click', (e) => this.onWinScreenClick(e));
     this.els['penpick-card'].addEventListener('click', (e) => this.onPenPickClick(e));
     // One delegated listener covers every shop button.
     this.els['shop-card'].addEventListener('click', (e) => this.onShopClick(e));
     this.els['cons-list'].addEventListener('click', (e) => this.onConsumableClick(e));
+    this.els['cons-list'].addEventListener('contextmenu', (e) => {
+      const icon = e.target.closest('[data-use]');
+      if (icon) { e.preventDefault(); const i = Number(icon.dataset.use); this.toggleMenu(`cons-${i}`, icon, () => this.openConsMenu(i, icon)); }
+    });
+    this.els['cardmenu'].addEventListener('click', (e) => this.onCardMenuClick(e));
     this.els['btn-reset'].addEventListener('click', () => this.openReset());
     this.els['reset-card'].addEventListener('click', (e) => this.onResetClick(e));
     document.addEventListener('keydown', (e) => this.onKey(e));
@@ -74,6 +81,7 @@ class UI {
     }
     document.addEventListener('pointerdown', (e) => {
       if (!e.target.closest('.tile, .shelf-book')) this.hideTip();
+      if (!e.target.closest('#cardmenu, .shelf-book, .cons-icon, .shop-item, #bin-slot')) this.closeCardMenu();
     });
     this.syncHint();
     window.addEventListener('resize', () => this.syncHint());
@@ -92,6 +100,7 @@ class UI {
     this.renderShelf();
     this.renderMap();
     this.renderQuest();
+    this.renderBin();
     this.announceUnlocks();
   }
 
@@ -339,13 +348,18 @@ class UI {
   // One delegated handler: swap the tip only when the hovered anchor changes,
   // so moving within an element (or over its children) never flickers.
   onHover(e) {
-    const anchor = e.target.closest('.tile[data-tile-id], .shelf-book[data-book-idx]');
+    const anchor = e.target.closest('.tile[data-tile-id], .shelf-book[data-book-idx], .shop-item[data-kind], .cons-icon[data-use]');
     if (anchor === this.tipAnchor) return;
     this.tipAnchor = anchor;
     if (!anchor) return this.hideTip();
     if (anchor.classList.contains('shelf-book')) {
       const book = this.game.books.shelf[Number(anchor.dataset.bookIdx)];
       if (book) this.showTip(anchor, this.bookTip(book)); else this.hideTip();
+    } else if (anchor.classList.contains('shop-item')) {
+      this.showTip(anchor, this.shopItemTip(anchor));
+    } else if (anchor.classList.contains('cons-icon')) {
+      const c = this.game.consumables[Number(anchor.dataset.use)];
+      if (c) this.showTip(anchor, this.consTip(c)); else this.hideTip();
     } else {
       const tile = this.findTile(Number(anchor.dataset.tileId));
       if (tile) this.showTip(anchor, this.tileTip(tile)); else this.hideTip();
@@ -617,39 +631,266 @@ class UI {
         // Pointer-based drag: one code path for mouse AND touch (HTML5 drag
         // events never fire on touch screens).
         el.addEventListener('pointerdown', (e) => this.onShelfPointerDown(e, i, el));
-        // Long-press a Book for its details (a hold, not a drag).
-        el.addEventListener('pointerdown', () => {
-          const t = setTimeout(() => this.showTip(el, this.bookTip(book)), 420);
-          const done = () => {
-            clearTimeout(t);
-            el.removeEventListener('pointerup', done);
-            el.removeEventListener('pointermove', done);
-            el.removeEventListener('pointercancel', done);
-          };
-          el.addEventListener('pointerup', done);
-          el.addEventListener('pointermove', done);
-          el.addEventListener('pointercancel', done);
+        // A plain click toggles the Book's SELL action (handled on release in
+        // onShelfPointerDown); right-click does the same. Details show on hover.
+        el.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          this.toggleMenu(`shelf-${i}`, el, () => this.openBookMenu(i, el));
         });
         slot.appendChild(el);
       }
       shelfEl.appendChild(slot);
     }
 
-    // Held sundries, then any standing slips (boons) waiting to cash in.
-    const consRows = g.consumables.map((c, i) =>
-      `<div class="shelf-row" title="${c.name} — ${c.desc}">` +
-      `${this.slipArt(c, 'slip-icon-sm')} ${c.name}` +
-      `<button class="btn btn-tiny" data-use="${i}">USE</button></div>`).join('');
+    const consSlots = [];
+    for (let i = 0; i < CFG.CONSUMABLE_SLOTS; i++) {
+      const c = g.consumables[i];
+      consSlots.push(c
+        ? `<div class="cons-icon" data-use="${i}" title="${c.name} — ${c.desc}">`
+          + `${this.slipArt(c, 'slip-icon-sm')}</div>`
+        : '<div class="cons-slot-empty"></div>');
+    }
+    // Standing slips (boons) waiting to cash in ride along after the sundries.
     const boonRows = (g.boons || []).map((id) => {
       const b = BOONS.find((x) => x.id === id);
       return b ? `<div class="boon-row" title="${b.desc}">` +
         `${this.slipArt(b, 'slip-icon-sm')} ${b.name}</div>` : '';
     }).join('');
-    this.els['cons-list'].innerHTML =
-      (consRows || boonRows) ? consRows + boonRows : '&mdash;';
+    this.els['cons-list'].innerHTML = consSlots.join('') + boonRows;
 
     this.els['btn-library'].textContent =
       `LIBRARY ${g.unlocks.unlockedCount}/${BOOKS.length}`;
+  }
+
+  // The Bin is only workable between rounds — i.e. while the shop is open.
+  binUsable() { return !this.els['shop'].classList.contains('hidden'); }
+
+  // Render the one-slot Bin. Shown left of the shelf while shopping, or any
+  // time it actually holds a stashed Book.
+  renderBin() {
+    const g = this.game;
+    const show = this.binUsable() || !!g.bin;
+    this.els['bin-area'].classList.toggle('hidden', !show);
+    const binEl = this.els['bin'];
+    binEl.innerHTML = '';
+    const slot = document.createElement('div');
+    slot.id = 'bin-slot';
+    if (g.bin) {
+      const el = document.createElement('div');
+      el.className = 'shelf-book';
+      el.dataset.binBook = '1';
+      el.innerHTML = this.bookArt(g.bin, '', g.binSticker ? STICKERS[g.binSticker] : null)
+        + `<span class="shelf-book-name">${g.bin.name}</span>`;
+      el.addEventListener('pointerdown', (e) => this.onBinPointerDown(e, el));
+      slot.appendChild(el);
+    } else {
+      slot.innerHTML = `<span id="bin-hint">${this.binUsable() ? 'stash a Book here' : 'empty'}</span>`;
+    }
+    binEl.appendChild(slot);
+  }
+
+  // Drag the stashed Book back onto the shelf, or click for its menu.
+  onBinPointerDown(e, el) {
+    if (this.busy || !this.binUsable()) return;
+    const start = { x: e.clientX, y: e.clientY };
+    let dragging = false;
+    el.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      if (!dragging && Math.abs(ev.clientX - start.x) + Math.abs(ev.clientY - start.y) > 8) {
+        dragging = true; el.classList.add('touch-drag'); this.hideTip();
+      }
+    };
+    const up = (ev) => {
+      el.releasePointerCapture(ev.pointerId);
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', up);
+      el.classList.remove('touch-drag');
+      if (!dragging) { this.toggleMenu('bin', el, () => this.openBinMenu(el)); return; }
+      const hit = document.elementFromPoint(ev.clientX, ev.clientY);
+      if (hit && hit.closest('#shelf')) {
+        if (this.game.binRetrieve()) { Sfx.click(); this.saveRun(); this.render(); if (this.binUsable()) this.renderShop(); return; }
+        Sfx.invalid(); this.toast('The shelf is full');
+      }
+      this.renderBin();
+    };
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('contextmenu', (ev) => { ev.preventDefault(); this.toggleMenu('bin', el, () => this.openBinMenu(el)); }, { once: true });
+  }
+
+  openBinMenu(anchor) {
+    const g = this.game; if (!g.bin) return;
+    const val = g.books.sellValue(g.bin);
+    this.openCardMenu(anchor, `${g.bin.name} · stashed`, [
+      { label: 'RETURN TO SHELF', cls: 'btn-primary', run: () => {
+          this.closeCardMenu();
+          if (g.binRetrieve()) { Sfx.click(); this.saveRun(); this.render(); if (this.binUsable()) this.renderShop(); }
+          else { Sfx.invalid(); this.toast('The shelf is full'); }
+        } },
+      { label: `SELL · ${val} TK`, cls: 'btn-danger', run: () => {
+          g.tickets += val; g.bin = null; g.binState = null; g.binSticker = null;
+          Sfx.buy(); this.closeCardMenu(); this.saveRun(); this.render(); if (this.binUsable()) this.renderShop();
+        } },
+    ]);
+  }
+
+  // --- Card action menu (long-press / right-click) -------------------------
+  openCardMenu(anchor, title, actions) {
+    if (!anchor) return;
+    this._menuActions = actions;
+    const menu = this.els['cardmenu'];
+    menu.innerHTML = `<div class="cardmenu-title">${title}</div>`
+      + actions.map((a, i) => `<button class="btn btn-tiny ${a.cls || ''}" data-mi="${i}" ${a.disabled ? 'disabled' : ''}>${a.label}</button>`).join('');
+    menu.classList.remove('hidden');
+    this.hideTip();
+    const r = anchor.getBoundingClientRect();
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    let left = r.left + r.width / 2 - mw / 2;
+    let top = r.bottom + 6;
+    left = Math.max(6, Math.min(left, window.innerWidth - mw - 6));
+    if (top + mh > window.innerHeight - 6) top = Math.max(6, r.top - mh - 6);
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+  }
+
+  onCardMenuClick(e) {
+    const btn = e.target.closest('[data-mi]');
+    if (!btn || !this._menuActions) return;
+    const a = this._menuActions[Number(btn.dataset.mi)];
+    if (a && a.run) a.run();
+  }
+
+  closeCardMenu() {
+    this.els['cardmenu'].classList.add('hidden');
+    this._menuActions = null;
+    this._menuKey = null;
+    document.querySelectorAll('.menu-selected').forEach((el) => el.classList.remove('menu-selected'));
+  }
+
+  // Click an item to reveal its action; click it again to put it away.
+  toggleMenu(key, anchor, openFn) {
+    if (this._menuKey === key) { this.closeCardMenu(); return; }
+    this.closeCardMenu();
+    openFn();
+    this._menuKey = key;
+    if (anchor) anchor.classList.add('menu-selected');
+  }
+
+  // Owned shelf Book: click reveals a single SELL action (click the Book again
+  // to put it back down). Details show on hover.
+  openBookMenu(i, anchor) {
+    const g = this.game;
+    const book = g.books.shelf[i];
+    if (!book) return;
+    const val = g.books.sellValue(book);
+    this.openCardMenu(anchor, book.name, [
+      { label: `SELL · ${val} TK`, cls: 'btn-danger', run: () => {
+          this.shop.sellBook(book.id); Sfx.buy(); this.closeCardMenu();
+          this.saveRun(); this.render(); if (this.binUsable()) this.renderShop();
+        } },
+    ]);
+  }
+
+  // A shop offer: click reveals BUY (or why it's blocked). Reuses the real
+  // purchase flow — bags and pen packs still open their pickers.
+  openBuyMenu(kind, i, anchor) {
+    const s = this.shop, g = this.game;
+    let title = '', cost = 0, blocked = null;
+    if (kind === 'book') {
+      const offer = s.books[i]; if (!offer) return;
+      title = offer.def.name; cost = s.bookCost(offer);
+      const donated = offer.sticker && offer.sticker.noSlot;
+      blocked = (g.books.isFull && !donated) ? 'SHELF FULL' : (!s.canAfford(cost) ? `NEED ${cost} TK` : null);
+    } else if (kind === 'bag') {
+      const bag = s.bags[i]; if (!bag) return;
+      title = bag.name; cost = bag.cost;
+      blocked = !s.canAfford(cost) ? `NEED ${cost} TK` : null;
+    } else if (kind === 'cons') {
+      const c = s.consumables[i]; if (!c) return;
+      title = c.name; cost = c.cost;
+      blocked = g.consumables.length >= CFG.CONSUMABLE_SLOTS ? 'POCKETS FULL'
+        : (!s.canAfford(cost) ? `NEED ${cost} TK` : null);
+    } else if (kind === 'pen') {
+      title = 'Pen Pack'; cost = CFG.PEN_PACK_COST;
+      blocked = !s.canAfford(cost) ? `NEED ${cost} TK` : null;
+    }
+    this.openCardMenu(anchor, title, [
+      { label: blocked || `BUY · ${cost} TK`, cls: 'btn-buy', disabled: !!blocked,
+        run: blocked ? null : () => this.doBuy(kind, i) },
+    ]);
+  }
+
+  // Shared purchase resolution (mirrors the old data-act buy branches).
+  doBuy(kind, i) {
+    const s = this.shop;
+    let ok = true;
+    if (kind === 'book') ok = s.buyBook(i);
+    else if (kind === 'bag') { const res = s.buyBag(i); ok = !!res; if (res) this.openPicker(res); }
+    else if (kind === 'cons') ok = s.buyConsumable(i);
+    else if (kind === 'pen') { const res = s.buyPenPack(); ok = !!res; if (res) this.openPenPick(res); }
+    if (ok) Sfx.buy(); else Sfx.invalid();
+    this.closeCardMenu();
+    this.renderShop(); this.renderStats(); this.renderShelf(); this.renderBin();
+    this.drainAchievements();
+    this.game.saveRun();
+  }
+
+  // Hover tooltip for a shop offer (books reuse the Book tooltip).
+  shopItemTip(anchor) {
+    const kind = anchor.dataset.kind, i = Number(anchor.dataset.i), s = this.shop;
+    if (kind === 'book' && s.books[i]) {
+      const offer = s.books[i];
+      let html = this.bookTip(offer.def);
+      if (offer.sticker) html += `<div class="tip-line"><b>${offer.sticker.name}</b> — ${offer.sticker.desc}</div>`;
+      return html + `<div class="tip-line tip-status">${s.bookCost(offer)} TK</div>`;
+    }
+    if (kind === 'bag' && s.bags[i]) {
+      const b = s.bags[i];
+      return `<div class="tip-name">${b.name}</div><div class="tip-sub r-${b.rarity}">${b.rarity.toUpperCase()} · ${b.count} TILES</div>`
+        + `<div class="tip-line">${b.desc}</div><div class="tip-line tip-status">${b.cost} TK</div>`;
+    }
+    if (kind === 'cons' && s.consumables[i]) return this.consTip(s.consumables[i]);
+    if (kind === 'pen') {
+      return `<div class="tip-name">Pen Pack</div><div class="tip-line">Pull ${CFG.PEN_TILE_PULLS} slugs, choose 1 of ${CFG.PEN_CHOICES} pens, ink one slug.</div>`
+        + `<div class="tip-line tip-status">${CFG.PEN_PACK_COST} TK</div>`;
+    }
+    return '';
+  }
+
+  consTip(c) {
+    return `<div class="tip-name">${c.name}${c.rare ? ' <span class="r-rare">RARE</span>' : ''}</div>`
+      + `<div class="tip-line">${c.desc}</div>`;
+  }
+
+  // Held consumable: use it, or sell it back for a pittance.
+  openConsMenu(i, anchor) {
+    const g = this.game;
+    const c = g.consumables[i];
+    if (!c) return;
+    const val = Math.max(1, Math.floor((c.cost || 0) * CFG.SELL_FACTOR));
+    this.openCardMenu(anchor, c.name, [
+      { label: 'USE', cls: 'btn-primary', run: () => { this.closeCardMenu(); this.useConsumableAt(i); } },
+      { label: `SELL · ${val} TK`, cls: 'btn-danger', run: () => {
+          g.sellConsumable(i); Sfx.buy(); this.closeCardMenu(); this.saveRun(); this.render();
+        } },
+    ]);
+  }
+
+  useConsumableAt(index) {
+    const item = this.game.consumables[index];
+    if (!item || this.busy) return;
+    const result = this.game.useConsumable(index);
+    if (result) {
+      Sfx.buy();
+      this.toast(typeof result === 'string' ? result : `${item.name} used`);
+    } else {
+      Sfx.invalid();
+      this.toast(this.slipRefusal(item));
+    }
+    this.saveRun();
+    this.render();
   }
 
   toast(msg) {
@@ -693,7 +934,20 @@ class UI {
       el.removeEventListener('pointerup', up);
       el.removeEventListener('pointercancel', up);
       el.classList.remove('touch-drag');
-      if (!dragging) return; // a plain tap on a Book does nothing
+      if (!dragging) { // a plain tap toggles the Book's SELL action
+        this.toggleMenu(`shelf-${index}`, el, () => this.openBookMenu(index, el));
+        return;
+      }
+      // Dropped on the Bin? stash it out of play (shop only).
+      const hit = document.elementFromPoint(ev.clientX, ev.clientY);
+      if (hit && hit.closest('#bin-slot') && this.binUsable()) {
+        const book = this.game.books.shelf[index];
+        if (book && this.game.binPark(book.id)) {
+          Sfx.click(); this.saveRun(); this.render();
+          if (this.binUsable()) this.renderShop();
+          return;
+        }
+      }
       const over = this.bookElementAt(ev.clientX, ev.clientY);
       if (over && over !== el) {
         const to = Number(over.dataset.bookIdx);
@@ -704,6 +958,7 @@ class UI {
         }
       }
       this.renderShelf(); // clear any drag-over highlight
+      this.renderBin();
     };
 
     el.addEventListener('pointermove', move);
@@ -932,20 +1187,10 @@ class UI {
   }
 
   onConsumableClick(e) {
-    const btn = e.target.closest('[data-use]');
-    if (!btn || this.busy) return;
-    const item = this.game.consumables[Number(btn.dataset.use)];
-    const result = this.game.useConsumable(Number(btn.dataset.use));
-    if (result) {
-      Sfx.buy();
-      // Slips may report what they actually did.
-      this.toast(typeof result === 'string' ? result : `${item.name} used`);
-    } else {
-      Sfx.invalid();
-      this.toast(this.slipRefusal(item));
-    }
-    this.saveRun();
-    this.render();
+    const icon = e.target.closest('[data-use]');
+    if (!icon || this.busy) return;
+    const i = Number(icon.dataset.use);
+    this.toggleMenu(`cons-${i}`, icon, () => this.openConsMenu(i, icon));
   }
 
   // Why a slip wouldn't apply — each failure mode has its own reason.
@@ -993,6 +1238,8 @@ class UI {
       if (e.key === 'Enter') this.onOverlayButton();
       return;
     }
+    // Victory screen open: button-driven only, so swallow game keys.
+    if (!this.els['winscreen'].classList.contains('hidden')) return;
     if (!this.els['shop'].classList.contains('hidden')) return;
 
     if (e.key === 'Enter') {
@@ -1027,6 +1274,7 @@ class UI {
     this.saveRun(); // snapshot post-forge (or clear the save if the run just ended)
 
     if (outcome === 'won') { Sfx.win(); this.showOverlay('won'); }
+    else if (outcome === 'wonGame') { Sfx.win(); this.showWinScreen(); }
     else if (outcome === 'lost') { Sfx.lose(); this.showOverlay('lost'); }
   }
 
@@ -1305,8 +1553,12 @@ class UI {
     if (this.overlayKind === 'won') {
       if (this.game.shopDue) {
         this.shop.open();
+        this.els['shop-card'].classList.add('opening'); // one-time slide-in
         this.renderShop();
+        this.els['playfield'].classList.add('shopping'); // shop takes over the play area
         this.els['shop'].classList.remove('hidden');
+        this.renderBin(); // the Bin appears left of the shelf while shopping
+        setTimeout(() => this.els['shop-card'].classList.remove('opening'), 700);
         return; // nextLevel happens when the shop closes
       }
       this.game.nextLevel();
@@ -1333,6 +1585,95 @@ class UI {
     // cadence (after CLEARING a shop-due level), so nothing to do here.
   }
 
+  // --- Victory screen (winning boss beaten) --------------------------------
+
+  showWinScreen() {
+    this.winStep = 'main'; // 'main' = stats + Endless/Menu; 'save' = save/stop
+    this.renderWinScreen();
+    this.els['winscreen'].classList.remove('hidden');
+  }
+
+  renderWinScreen() {
+    const g = this.game;
+    const s = g.stats;
+
+    if (this.winStep === 'save') {
+      this.els['winscreen-card'].innerHTML = `
+        <div class="shop-h"><h2>KEEP THIS RUN?</h2></div>
+        <p class="picker-hint">Save it to carry the same deck into <b>Endless</b> later,
+          or close the book on it and return to the menu.</p>
+        <div class="shop-foot win-foot">
+          <button class="btn" data-act="win-stop">STOP THE RUN</button>
+          <button class="btn btn-primary" data-act="win-save">SAVE FOR ENDLESS</button>
+        </div>`;
+      return;
+    }
+
+    const book = g.mostEffectiveBook();
+    const stat = (label, value, sub = '') => `
+      <div class="win-stat"><span>${label}</span><b>${value}</b>${sub ? `<i>${sub}</i>` : ''}</div>`;
+    const stats = `
+      <div class="win-stats">
+        ${stat('Best word', s.bestWord, `${Util.fmt(s.bestScore)} pts`)}
+        ${stat('Words forged', s.wordsForged)}
+        ${stat('Bosses bound', s.bossesBeaten)}
+        ${stat('Tickets earned', Util.fmt(s.ticketsEarnedTotal))}
+        ${stat('Tiles destroyed', s.tilesDestroyed)}
+        ${stat('Final deck', `${g.deck.all.length} slugs`)}
+        ${book ? `<div class="win-stat win-stat-book"><span>Most valuable Book</span>
+          <b>${book.name}</b><i>+${Util.fmt(book.output)} to your scores</i></div>` : ''}
+      </div>`;
+
+    this.els['winscreen-card'].innerHTML = `
+      <div class="shop-h">
+        <h2>MAGNUM OPUS</h2>
+        <div class="shop-tickets">${CFG.WIN_BOSSES} / ${CFG.WIN_BOSSES} BOSSES</div>
+      </div>
+      <p class="picker-hint">You bound all ${CFG.WIN_BOSSES} presses — the run is won on
+        <b>${CFG.DIFFICULTIES[g.difficulty || 0].name}</b>.</p>
+      ${stats}
+      <div class="shop-foot win-foot">
+        <button class="btn" data-act="win-menu">MAIN MENU</button>
+        <button class="btn btn-primary" data-act="win-endless">ENTER ENDLESS &rarr;</button>
+      </div>`;
+  }
+
+  onWinScreenClick(e) {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const act = btn.dataset.act;
+    // Both "play now" and "save for later" flag the run Endless and advance
+    // into its first level; the winning-boss shop is skipped (balance is moot
+    // past the win). Stop clears the save. Main Menu opens the save/stop step.
+    if (act === 'win-endless') {
+      this.game.endless = true;
+      this.game.nextLevel();
+      this.els['winscreen'].classList.add('hidden');
+      this.placed.clear();
+      Sfx.buy();
+      this.render();
+      this.game.saveRun();
+      this.toast('Endless — the press runs on.');
+    } else if (act === 'win-menu') {
+      this.winStep = 'save';
+      Sfx.click();
+      this.renderWinScreen();
+    } else if (act === 'win-save') {
+      this.game.endless = true;
+      this.game.nextLevel();
+      this.game.saveRun(); // a resumable Endless run waits on the menu
+      this.els['winscreen'].classList.add('hidden');
+      Sfx.buy();
+      this.toast('Saved — resume in Endless from the menu.');
+      this.openDeckPick();
+    } else if (act === 'win-stop') {
+      this.game.clearSave();
+      this.els['winscreen'].classList.add('hidden');
+      Sfx.click();
+      this.openDeckPick();
+    }
+  }
+
   // --- The Foundry (shop) ---------------------------------------------------
 
   renderShop() {
@@ -1347,37 +1688,26 @@ class UI {
           const donated = offer.sticker && offer.sticker.noSlot;
           const blocked = (g.books.isFull && !donated) ? 'SHELF FULL'
             : (!s.canAfford(cost) ? tk(cost) : null);
-          const buyLabel = cost === 0 ? 'FREE — TAKE IT' : 'BUY · ' + tk(cost);
-          return `<div class="shop-card shop-card-book">
+          return `<div class="shop-item ${blocked ? 'blocked' : ''}" data-kind="book" data-i="${i}">
             ${this.bookArt(b, '', offer.sticker)}
-            <h4>${b.name}</h4>
-            <div class="rarity r-${b.rarity}">${b.rarity.toUpperCase()}</div>
-            <div class="desc">${b.desc}</div>
-            ${offer.sticker ? `<div class="sticker-line">${offer.sticker.name} — ${offer.sticker.desc}</div>` : ''}
-            ${b.flavor ? `<div class="flavor">${b.flavor}</div>` : ''}
-            <button class="btn btn-buy" data-act="book" data-i="${i}" ${blocked ? 'disabled' : ''}>
-              ${blocked || buyLabel}</button>
+            <span class="shop-item-name">${b.name}</span>
+            <span class="shop-item-cost r-${b.rarity}">${cost === 0 ? 'FREE' : tk(cost)}</span>
           </div>`;
         }).join('');
 
     const penCard = s.penPack
-      ? `<div class="shop-card shop-card-bag">
+      ? `<div class="shop-item ${s.canAfford(CFG.PEN_PACK_COST) ? '' : 'blocked'}" data-kind="pen" data-i="0">
           <span class="pen-icon" style="color: var(--copper)"><svg viewBox="0 0 48 48"><use href="#icon-pen"/></svg></span>
-          <h4>Pen Pack</h4>
-          <div class="desc">Pull ${CFG.PEN_TILE_PULLS} slugs from your bag, choose 1 of ${CFG.PEN_CHOICES} pens, and ink one slug — rewriting its style.</div>
-          <button class="btn btn-buy" data-act="penpack" ${s.canAfford(s.penCost()) ? '' : 'disabled'}>
-            ${s.penCost() === 0 ? 'FREE — TAKE IT' : 'BUY · ' + tk(s.penCost())}</button>
+          <span class="shop-item-name">Pen Pack</span>
+          <span class="shop-item-cost">${s.penCost() === 0 ? 'FREE' : tk(s.penCost())}</span>
         </div>`
       : '';
 
     const bagCards = s.bags.length === 0 ? '<p class="sold-out">Sold out.</p>'
-      : s.bags.map((b, i) => `<div class="shop-card shop-card-bag">
-          <div class="bag-icon r-${b.rarity}"><svg viewBox="0 0 48 48"><use href="#${b.icon}"/></svg></div>
-          <h4>${b.name}</h4>
-          <div class="rarity r-${b.rarity}">${b.rarity.toUpperCase()} · ${b.count} TILES</div>
-          <div class="desc">${b.desc}</div>
-          <button class="btn btn-buy" data-act="bag" data-i="${i}"
-            ${s.canAfford(b.cost) ? '' : 'disabled'}>BUY · ${tk(b.cost)}</button>
+      : s.bags.map((b, i) => `<div class="shop-item ${s.canAfford(b.cost) ? '' : 'blocked'}" data-kind="bag" data-i="${i}">
+          <span class="bag-icon r-${b.rarity}"><svg viewBox="0 0 48 48"><use href="#${b.icon}"/></svg></span>
+          <span class="shop-item-name">${b.name}</span>
+          <span class="shop-item-cost r-${b.rarity}">${tk(b.cost)}</span>
         </div>`).join('');
 
     const consCards = s.consumables.length === 0 ? '<p class="sold-out">Sold out.</p>'
@@ -1385,21 +1715,12 @@ class UI {
           const cCost = s.consumableCost(i);
           const blocked = g.consumables.length >= CFG.CONSUMABLE_SLOTS ? 'POCKETS FULL'
             : (!s.canAfford(cCost) ? tk(cCost) : null);
-          const cLabel = cCost === 0 ? 'FREE — TAKE IT' : 'BUY · ' + tk(cCost);
-          return `<div class="shop-card shop-card-slip ${c.rare ? 'slip-rare' : ''}">
+          return `<div class="shop-item ${blocked ? 'blocked' : ''} ${c.rare ? 'slip-rare' : ''}" data-kind="cons" data-i="${i}">
             ${this.slipArt(c)}
-            <h4>${c.name}${c.rare ? ' <span class="rarity r-rare">RARE</span>' : ''}</h4>
-            <div class="desc">${c.desc}</div>
-            <button class="btn btn-buy" data-act="cons" data-i="${i}" ${blocked ? 'disabled' : ''}>
-              ${blocked || cLabel}</button>
+            <span class="shop-item-name">${c.name}</span>
+            <span class="shop-item-cost">${cCost === 0 ? 'FREE' : tk(cCost)}</span>
           </div>`;
         }).join('');
-
-    const shelfRows = g.books.shelf.length === 0 ? '<p class="sold-out">Your shelf is empty.</p>'
-      : g.books.shelf.map((b) => `<div class="sell-row">
-          <span>${this.bookArt(b, 'book-icon-sm', g.books.stickerOf(b))} <b>${b.name}</b> — ${b.desc}</span>
-          <button class="btn btn-buy" data-act="sell" data-id="${b.id}">SELL · ${tk(g.books.sellValue(b))}</button>
-        </div>`).join('');
 
     this.els['shop-card'].innerHTML = `
       <div class="shop-h">
@@ -1412,11 +1733,9 @@ class UI {
       <div class="shop-row">${bagCards}${penCard}</div>
       <div class="shop-section-title">SUNDRIES — single use (${g.consumables.length}/${CFG.CONSUMABLE_SLOTS} held)</div>
       <div class="shop-row">${consCards}</div>
-      <div class="shop-section-title">YOUR SHELF — sell for half</div>
-      ${shelfRows}
       <div class="shop-foot">
-        <button class="btn btn-buy" data-act="restock" ${s.canAfford(CFG.RESTOCK_COST) ? '' : 'disabled'}>
-          RESTOCK · ${tk(CFG.RESTOCK_COST)}</button>
+        <button class="btn btn-buy" data-act="restock" ${s.canAfford(g.rerollCost) ? '' : 'disabled'}>
+          RESTOCK · ${tk(g.rerollCost)}</button>
         <button class="btn btn-primary" data-act="close">NEXT LEVEL &rarr;</button>
       </div>`;
   }
@@ -1860,39 +2179,32 @@ class UI {
   }
 
   onShopClick(e) {
+    // A compact offer tile: click reveals its BUY action (click again closes).
+    const item = e.target.closest('.shop-item');
+    if (item) {
+      const kind = item.dataset.kind, i = Number(item.dataset.i);
+      this.toggleMenu(`shop-${kind}-${i}`, item, () => this.openBuyMenu(kind, i, item));
+      return;
+    }
     const btn = e.target.closest('[data-act]');
     if (!btn) return;
-    const { act, i, id } = btn.dataset;
-    let ok = true;
-
-    if (act === 'book') ok = this.shop.buyBook(Number(i));
-    else if (act === 'bag') {
-      const res = this.shop.buyBag(Number(i));
-      ok = !!res;
-      if (res) this.openPicker(res);
-    }
-    else if (act === 'penpack') {
-      const res = this.shop.buyPenPack();
-      ok = !!res;
-      if (res) this.openPenPick(res);
-    }
-    else if (act === 'cons') ok = this.shop.buyConsumable(Number(i));
-    else if (act === 'sell') ok = this.shop.sellBook(id);
-    else if (act === 'restock') ok = this.shop.restock();
-    else if (act === 'close') {
+    if (btn.dataset.act === 'close') {
+      this.closeCardMenu();
       this.els['shop'].classList.add('hidden');
+      this.els['playfield'].classList.remove('shopping'); // play area returns
       this.game.nextLevel();
       this.render();
       this.game.saveRun(); // shop closed → next round is the new checkpoint
       this.maybeOfferSkip();
       return;
     }
-
-    if (ok) Sfx.buy(); else Sfx.invalid();
-    this.renderShop();
-    this.renderStats();
-    this.renderShelf();
-    this.drainAchievements(); // a shop sticker can earn one; shop skips render()
-    this.game.saveRun();      // persist purchases as they happen
+    if (btn.dataset.act === 'restock') {
+      const ok = this.shop.restock();
+      if (ok) Sfx.buy(); else Sfx.invalid();
+      this.closeCardMenu();
+      this.renderShop();
+      this.renderStats();
+      this.game.saveRun();
+    }
   }
 }

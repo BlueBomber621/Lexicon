@@ -12,6 +12,7 @@ class Shop {
   }
 
   open() {
+    this.game.decayRerollCost(); // a fresh shop relaxes the reroll price
     // The Coupon Book grants one free purchase per Foundry visit.
     this.game.freePurchase = this.game.books.owns('coupon-book');
     this.stock();
@@ -52,9 +53,17 @@ class Shop {
 
   rollSticker() {
     if (Math.random() >= CFG.STICKER_CHANCE) return null;
+    // Donated (slot-free) Books pile onto the shelf without taking a slot, so
+    // once you already hold DONATED_SOFTCAP of them the sticker turns rare —
+    // keeps the shelf from ballooning to twenty books.
+    const donated = this.game.books.shelf.filter((b) => {
+      const s = this.game.books.stickerOf(b);
+      return s && s.noSlot;
+    }).length;
     const weighted = [];
     for (const [id, w] of Object.entries(CFG.STICKER_WEIGHTS)) {
-      for (let i = 0; i < w; i++) weighted.push(id);
+      const weight = (id === 'donated' && donated >= CFG.DONATED_SOFTCAP) ? 1 : w;
+      for (let i = 0; i < weight; i++) weighted.push(id);
     }
     return STICKERS[weighted[Math.floor(Math.random() * weighted.length)]];
   }
@@ -245,8 +254,12 @@ class Shop {
   }
 
   restock() {
-    if (!this.canAfford(CFG.RESTOCK_COST)) return false;
-    this.game.tickets -= CFG.RESTOCK_COST;
+    // A reroll isn't a "purchase" — it can't ride the Coupon Book's free buy,
+    // so it checks real tickets rather than canAfford().
+    const cost = this.game.rerollCost;
+    if (this.game.tickets < cost) return false;
+    this.game.tickets -= cost;
+    this.game.rerollCost += CFG.RESTOCK_STEP; // each reroll this shop costs more
     this.stock();
     return true;
   }

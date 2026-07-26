@@ -6,9 +6,12 @@ const CFG = {
   // --- Composing ------------------------------------------------------
   RACK_SIZE: 12,        // total hand size (rack + stick + tray); 1 more than the
                         // stick holds, so the extra tile is selection headroom
-  STICK_SLOTS: 11,      // slots on the composing stick (max word length)
+  STICK_SLOTS: 11,      // physical slots on the composing stick
   MIN_WORD_LEN: 1,      // shortest playable word
-  MAX_WORD_LEN: 11,     // longest playable word (must match STICK_SLOTS)
+  MAX_WORD_LEN: 20,     // longest RESOLVED word the dict/validation accepts.
+                        // Deliberately decoupled from STICK_SLOTS: multi-letter
+                        // sorts (Œ→CE, &→AND) spell more letters than the slots
+                        // they occupy, so a full 11-slot stick can read up to 20.
 
   // --- Round economy --------------------------------------------------
   PLAYS_PER_ROUND: 3,   // words you may forge per round
@@ -40,14 +43,14 @@ const CFG = {
   TEST_COPIES: 3,          // copies of each variant / alteration when testing
 
   // --- Progression ----------------------------------------------------
-  // Targets run in 6-level sections ending on a boss. Within a section the
-  // increment starts at DELTA and grows by DD each round; after each boss the
-  // next section starts at bossTarget × BOSS_MULT, and DELTA/DD grow by
+  // Targets run in BOSS_EVERY-level sections ending on a boss. Within a section
+  // the increment starts at DELTA and grows by DD each round; after each boss
+  // the next section starts at bossTarget × BOSS_MULT, and DELTA/DD grow by
   // DELTA_GROWTH/DD_GROWTH. There is ONE rounding rule: every goal is PARSED
   // to PARSE_DIGITS digits (upper digits kept, the rest zeroed), and each
   // level's increment is floored at the running goal's own grain so the parsed
-  // number always moves. Past ENDLESS_AFTER_BOSS bosses the run goes endless
-  // and every further section lifts the whole curve another power of ten.
+  // number always moves. The run is WON on the WIN_BOSSES-th boss; past that
+  // every further section lifts the whole curve another power of ten.
   // Full math in Game.target.
   TARGET: {
     // Tuned so a Note run peaks at a 10,000 goal on the last pre-endless boss
@@ -76,12 +79,23 @@ const CFG = {
     DELTA_GRAIN_MIN: 2,
     DD_GRAIN_MIN: 3,
   },
-  // Endless mode: after this many bosses (level 42 at BOSS_EVERY 6) each new
-  // section multiplies DELTA/DD by another ×10 — crazier and crazier scaling.
-  ENDLESS_AFTER_BOSS: 7,
-  TICKETS_PER_LETTER: 1,    // tickets = longest word length that round × this
-  TICKETS_PER_PLAY_LEFT: 1, // + this for each unused play at round end
+
+  // --- The simulator-tuned curve, kept to the side --------------------------
+  // The alternative balance pass, parked here so it's one swap away: paste
+  // these over TARGET above and restore Game._normalTarget/_endlessTarget to
+  // run it instead. Nothing reads this object.
+  TARGET_SIMULATOR_TUNED: {
+    START: 100, DELTA: 60, DELTA_GROWTH: 24, DD: 10, DD_GROWTH: 9, BOSS_MULT: 1.14,
+    // Its Endless was MULTIPLICATIVE rather than a per-section power of ten:
+    // each level ×= a multiplier that itself grows, and each Endless boss
+    // ×= BOSS_BONUS plus that multiplier.
+    ENDLESS: { DELTA_MULT: 1.5, DELTA_MULT_GROWTH: 0.2, BOSS_BONUS: 10 },
+  },
+
+  TICKETS_PER_LETTER: 2,    // tickets = longest word length that round × this
+  TICKETS_PER_PLAY_LEFT: 2, // + this for each unused play at round end
   BOSS_EVERY: 6,            // every 6th level is a boss with a rule modifier
+  WIN_BOSSES: 7,            // beating this many bosses WINS the run; beyond is Endless
   SHOP_EVERY: 2,            // the shop opens after every 2nd level cleared
 
   // Within each 6-level section, two stages are special (1-based positions):
@@ -94,10 +108,9 @@ const CFG = {
 
   // Difficulties, named for paper sizes. `mult` scales the target curve's
   // DELTA / DD (and their growths); START and the rounding rules are shared.
-  // Imperial draws from BOSSES_IMPERIAL when that pool has entries.
-  // The curve nerf: these are deliberately gentler than a raw difficulty
-  // ladder, because each step up also carries its own rule modifiers — the
-  // score goal is only half of what makes a paper size hard.
+  // Deliberately gentler than a raw ladder, because each step up also carries
+  // its own rule modifiers — the score goal is only half of what makes a paper
+  // size hard.
   // `challenge` names the standing rule modifier this size ADDS; a run carries
   // its own challenge plus every one below it (see CHALLENGES in content.js).
   // Note is clean — nothing but the numbers.
@@ -132,8 +145,13 @@ const CFG = {
   ACHIEVEMENTS_KEY: 'lexicon-achievements', // localStorage key for earned achievements
   SAVE_KEY: 'lexicon-run', // localStorage key for the in-progress run (Continue Run)
   SELL_FACTOR: 0.5,        // Books sell for cost × this (floored, min 1)
-  RESTOCK_COST: 2,         // reroll the shop's offers
-  MIN_DECK_SIZE: 80,       // Hellbox Purge can't thin the deck below this
+  RESTOCK_COST: 2,         // base cost to reroll the shop's offers (the reset value)
+  RESTOCK_STEP: 1,         // cost climbs by this with each reroll within one shop
+  RESTOCK_STICKY: 5,       // if the cost climbed past this, it won't fully reset next shop...
+  RESTOCK_DECAY: 3,        // ...it drops by this each new shop instead (floored at RESTOCK_FLOOR)
+  RESTOCK_FLOOR: 3,        // the reduced floor a "sticky" reroll cost decays toward
+  DONATED_SOFTCAP: 4,      // past this many donated (slot-free) Books, they spawn far rarer
+  MIN_DECK_SIZE: 50,       // Hellbox Purge can't thin the deck below this
 
   // --- Starting deck --------------------------------------------------
   // 94 tiles: a flatter, moderately vowel-forward distribution (~34% vowels)

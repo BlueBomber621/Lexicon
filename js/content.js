@@ -39,10 +39,10 @@ const BOOKS = [
     effect: { points: (ctx, step) => step.pts } },
 
   { id: 'long-s', name: 'Long S', rarity: 'common', cost: 3, trigger: 'word',
-    desc: 'Words containing an S get +2 mult.',
+    desc: 'Words containing an S get +3 mult.',
     flavor: 'The antique ſ, miſtaken for an f ſince 1790.',
     when: (ctx) => ctx.word.includes('S'),
-    effect: { mult: 2 } },
+    effect: { mult: 3 } },
 
   { id: 'ticket-punch', name: 'Ticket Punch', rarity: 'common', cost: 3, trigger: 'word',
     desc: '+1 ticket every word you forge.',
@@ -50,10 +50,10 @@ const BOOKS = [
     effect: { tickets: 1 } },
 
   { id: 'em-quad', name: 'Em Quad', rarity: 'common', cost: 3, trigger: 'word',
-    desc: 'Words of exactly 4 letters get +3 mult.',
+    desc: 'Words of exactly 4 letters get +8 mult.',
     flavor: 'A perfect square of blank metal. Knows its size.',
     when: (ctx) => ctx.word.length === 4,
-    effect: { mult: 3 } },
+    effect: { mult: 8 } },
 
   { id: 'copperplate', name: 'Copperplate', rarity: 'common', cost: 3, trigger: 'letter',
     desc: 'Every letter scores +2 points.',
@@ -61,10 +61,10 @@ const BOOKS = [
     effect: { points: 2 } },
 
   { id: 'minuscule', name: 'Minuscule', rarity: 'common', cost: 3, trigger: 'word',
-    desc: 'Words of 3 or fewer letters get +2 mult.',
+    desc: 'Words of 3 or fewer letters get +5 mult.',
     flavor: 'Small type, sharp teeth.',
     when: (ctx) => ctx.word.length <= 3,
-    effect: { mult: 2 } },
+    effect: { mult: 5 } },
 
   { id: 'widows-word', name: "The Widow's Word", rarity: 'common', cost: 3, trigger: 'letter',
     desc: 'The last letter of every word scores double.',
@@ -79,10 +79,10 @@ const BOOKS = [
     effect: { points: 10 } },
 
   { id: 'colophon', name: 'Colophon', rarity: 'common', cost: 3, trigger: 'word',
-    desc: 'Words ending in S get +2 mult.',
+    desc: 'Words ending in S get +4 mult.',
     flavor: 'The closing mark, pluralised.',
     when: (ctx) => ctx.word.endsWith('S'),
-    effect: { mult: 2 } },
+    effect: { mult: 4 } },
 
   // --- Shelf-position Books: effects read `pos` (index on The Shelf) -----
   { id: 'spine', name: 'The Spine', rarity: 'common', cost: 3, trigger: 'word',
@@ -465,10 +465,10 @@ const BOOKS = [
 
   // ===== Not-quite-books (the silly additions; custom cover bases) ======
   { id: 'bitten-book', name: 'The Bitten Book', rarity: 'common', cost: 3, trigger: 'letter',
-    desc: 'A, B and C score +3 extra points.',
+    desc: 'A, B and C score +5 extra points.',
     flavor: 'Someone took a bite out of the alphabet. Started at the beginning, naturally.',
     when: (ctx, step) => Util.spellsAny(step, 'ABC'),
-    effect: { points: 3 } },
+    effect: { points: 5 } },
 
   { id: 'bookmark', name: 'The Bookmark', rarity: 'common', cost: 3, trigger: 'word',
     desc: '+20 points on the first word of every round.',
@@ -600,9 +600,9 @@ const BOOKS = [
       test: (data, profile, game) => game.level >= 12 } },
 
   { id: 'book-of-finance', name: 'The Book of Finance', rarity: 'rare', cost: 8, trigger: 'roundWin',
-    desc: 'When you clear a level: +1 ticket per 4 tickets you hold.',
+    desc: 'When you clear a level: +1 ticket per 4 tickets you hold (max +10).',
     flavor: 'Compound interest, set in small caps.',
-    effect: { tickets: (ctx, step, game) => Math.floor(Math.max(0, game.tickets) / 4) },
+    effect: { tickets: (ctx, step, game) => Math.min(10, Math.floor(Math.max(0, game.tickets) / 4)) },
     // event 'always': tested on every unlock check, whatever caused it.
     unlock: { desc: 'Hold more than 50 tickets at once.', event: 'always',
       test: (data, profile, game) => game.tickets > 50 } },

@@ -61,6 +61,15 @@ class Game {
     this.runYCount = 0;        // Y slugs played this run (Quizlet's unlock)
     this.runPensUsed = 0;      // pens inked this run (The Magazine's unlock)
     this.bossesThisRun = 0;    // how deep this run has gone (boss-depth unlocks)
+    this.endless = false;      // set once the WIN_BOSSES-th boss is beaten and the
+                               // player chooses to carry on past the win screen
+    this.bookOutput = {};      // book id -> cumulative raw score it added this run
+                               // (drives the win screen's "most valuable Book")
+    this.rerollCost = CFG.RESTOCK_COST; // shop-reroll price; climbs per reroll, partly
+                                        // persists between shops (see decayRerollCost)
+    this.bin = null;           // a single Book stashed out of play (see binPark);
+    this.binState = null;      // its scaling state + sticker are kept safe with it
+    this.binSticker = null;
     this.stats = {
       wordsForged: 0, bestWord: '—', bestScore: 0,
       bossesBeaten: 0, ticketsEarnedTotal: 0, tilesDestroyed: 0,
@@ -279,7 +288,7 @@ class Game {
   // where goals run to millions and round numbers read better.
   static parseDigits(goal, section) {
     const T = CFG.TARGET;
-    if (section >= CFG.ENDLESS_AFTER_BOSS) return T.PARSE_DIGITS;
+    if (section >= CFG.WIN_BOSSES) return T.PARSE_DIGITS;
     return goal >= T.PARSE_LATE_ABOVE ? T.PARSE_DIGITS_LATE : T.PARSE_DIGITS;
   }
 
@@ -307,12 +316,12 @@ class Game {
 
   // ×10 per section once the run is past ENDLESS_AFTER_BOSS bosses; 1 before.
   static endlessMag(section) {
-    return Math.pow(10, Math.max(0, section - CFG.ENDLESS_AFTER_BOSS + 1));
+    return Math.pow(10, Math.max(0, section - CFG.WIN_BOSSES + 1));
   }
 
   // True once the run is into the endless sections.
   get isEndless() {
-    return this.section >= CFG.ENDLESS_AFTER_BOSS;
+    return this.section >= CFG.WIN_BOSSES;
   }
 
   get isBossLevel() {
@@ -322,6 +331,51 @@ class Game {
   // The shop opens after clearing every SHOP_EVERYth level.
   get shopDue() {
     return this.level % CFG.SHOP_EVERY === 0;
+  }
+
+  // Called when a new shop opens: the reroll price relaxes back toward its base,
+  // but a cost that climbed past RESTOCK_STICKY only decays part-way (it stays
+  // elevated), so serial rerollers keep paying a premium for a while.
+  decayRerollCost() {
+    this.rerollCost = this.rerollCost > CFG.RESTOCK_STICKY
+      ? Math.max(CFG.RESTOCK_FLOOR, this.rerollCost - CFG.RESTOCK_DECAY)
+      : CFG.RESTOCK_COST;
+  }
+
+  // --- The Bin: a one-slot stash for a Book, worked between rounds ----------
+  // Park a shelf Book into the (empty) Bin, keeping its scaling state and
+  // sticker safe; it stops scoring and frees its shelf slot until retrieved.
+  binPark(bookId) {
+    if (this.bin) return false; // one at a time
+    const def = this.books.shelf.find((b) => b.id === bookId);
+    if (!def) return false;
+    this.binState = this.books.state[def.id] || null;
+    this.binSticker = this.books.stickers[def.id] || null;
+    this.books.remove(bookId); // off the shelf (this also drops its state/sticker)
+    this.bin = def;
+    return true;
+  }
+
+  // Bring the stashed Book back onto the shelf (if there's room), restoring
+  // exactly the state and sticker it went in with.
+  binRetrieve() {
+    if (!this.bin || this.books.isFull) return false;
+    const def = this.bin;
+    if (!this.books.add(def)) return false;
+    if (this.binSticker) this.books.stickers[def.id] = this.binSticker;
+    if (this.binState) this.books.state[def.id] = this.binState;
+    this.books.syncHooks(); // the restored sticker may add a word-phase rider
+    this.bin = null; this.binState = null; this.binSticker = null;
+    return true;
+  }
+
+  // Sell a held consumable back — slips refund little (mostly 1 ticket).
+  sellConsumable(index) {
+    const def = this.consumables[index];
+    if (!def) return false;
+    this.consumables.splice(index, 1);
+    this.tickets += Math.max(1, Math.floor((def.cost || 0) * CFG.SELL_FACTOR));
+    return true;
   }
 
   // --- Boss modifiers ---------------------------------------------------
@@ -671,6 +725,7 @@ class Game {
       this.stats.bestScore = result.total;
       this.stats.bestWord = result.word;
     }
+    this.creditBooks(result.events); // tally each Book's raw score contribution
 
     // Played slugs go to the hellbox — except one-use variants (Paper) and
     // anything a boss claims (The Crucible), which are destroyed for good.
@@ -758,11 +813,45 @@ class Game {
       this.progress('roundWin',
         { wasBoss: this.isBossLevel, tickets: this.lastTicketsEarned,
           bossId: this.boss ? this.boss.id : null, bossesThisRun: this.bossesThisRun });
+      // Beating the WIN_BOSSES-th boss wins the run (once) — the UI shows the
+      // victory screen instead of the shop / next level. Endless runs past it.
+      if (this.isBossLevel && !this.endless && this.bossesThisRun >= CFG.WIN_BOSSES) {
+        outcome = 'wonGame';
+        this.state = 'gameWon';
+      }
     } else if (this.plays === 0) {
       outcome = 'lost';
       this.state = 'gameOver';
     }
     return { result, outcome };
+  }
+
+  // Attribute each scoring event's marginal effect on the running total
+  // (runP × runM) to whichever Book produced it. Book/sticker events carry
+  // their shelf index `b`; letter events don't, so they're skipped. Summed
+  // across the run this ranks Books by raw score added (see mostEffectiveBook).
+  creditBooks(events) {
+    let prev = 0;
+    for (const e of events) {
+      const product = (e.runP || 0) * (e.runM || 0);
+      const delta = product - prev;
+      prev = product;
+      if (e.b == null) continue; // a letter/tile event, not a Book's doing
+      const book = this.books.shelf[e.b];
+      if (book) this.bookOutput[book.id] = (this.bookOutput[book.id] || 0) + delta;
+    }
+  }
+
+  // The Book that added the most raw score this run, for the victory screen.
+  // Looks up by id against the full catalogue so a sold Book still counts.
+  mostEffectiveBook() {
+    let bestId = null, best = 0;
+    for (const [id, val] of Object.entries(this.bookOutput)) {
+      if (val > best) { best = val; bestId = id; }
+    }
+    if (!bestId) return null;
+    const def = BOOKS.find((b) => b.id === bestId);
+    return def ? { name: def.name, output: Math.round(best) } : null;
   }
 
   // --- Save / resume ----------------------------------------------------
@@ -784,6 +873,12 @@ class Game {
       bannedBooks: this.bannedBooks,
       quest: this.quest, questDone: this.questDone, skipOffer: this.skipOffer,
       bossesThisRun: this.bossesThisRun,
+      endless: this.endless,
+      bookOutput: this.bookOutput,
+      rerollCost: this.rerollCost,
+      bin: this.bin ? this.bin.id : null,
+      binState: this.binState,
+      binSticker: this.binSticker,
       runWords: [...this.runWords],
       runYCount: this.runYCount,
       runPensUsed: this.runPensUsed,
@@ -829,6 +924,12 @@ class Game {
     this.skipOffer = data.skipOffer || null;
     this.questResult = null;
     this.bossesThisRun = data.bossesThisRun || 0;
+    this.endless = data.endless || false;
+    this.bookOutput = data.bookOutput || {};
+    this.rerollCost = data.rerollCost || CFG.RESTOCK_COST;
+    this.bin = data.bin ? (BOOKS.find((b) => b.id === data.bin) || null) : null;
+    this.binState = data.binState || null;
+    this.binSticker = data.binSticker || null;
     this.runWords = new Set(data.runWords || []);
     this.runYCount = data.runYCount || 0;
     this.runPensUsed = data.runPensUsed || 0;
@@ -893,7 +994,9 @@ class Game {
 
   // Snapshot the run (or clear it once the run is over).
   saveRun() {
-    if (this.state === 'gameOver') return this.clearSave();
+    // A finished run (lost or won) has nothing to resume; the victory flow
+    // makes its own Endless save explicitly.
+    if (this.state === 'gameOver' || this.state === 'gameWon') return this.clearSave();
     try {
       localStorage.setItem(CFG.SAVE_KEY, JSON.stringify(this.serialize()));
     } catch (e) { /* storage blocked — no autosave this session */ }
@@ -910,7 +1013,9 @@ class Game {
       const raw = localStorage.getItem(CFG.SAVE_KEY);
       if (!raw) return null;
       const data = JSON.parse(raw);
-      return (data && data.v === 1 && data.state !== 'gameOver') ? data : null;
+      const resumable = data && data.v === 1
+        && data.state !== 'gameOver' && data.state !== 'gameWon';
+      return resumable ? data : null;
     } catch (e) {
       return null;
     }

@@ -21,6 +21,15 @@ const Util = {
     return n.toLocaleString('en-US');
   },
 
+  // Round to 2 significant figures: keep the two leading digits, zero the rest
+  // (1737 -> 1700, 12480 -> 12000, 640 -> 640). Kept from the simulator-tuned
+  // curve; `parse` below is the truncating variant the live curve uses.
+  sig2(n) {
+    if (!isFinite(n) || n <= 0) return n > 0 ? n : 0;
+    const mag = Math.pow(10, Math.floor(Math.log10(n)) - 1);
+    return Math.round(n / mag) * mag;
+  },
+
   // "Parse" a goal: keep its upper `digits` digits and zero the rest
   // (3348 -> 3300). Truncates, never rounds up. The single rounding rule the
   // target curve uses — see Game.target.
