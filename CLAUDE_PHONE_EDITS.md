@@ -254,6 +254,42 @@ it and bump the "through entry NNN".
   across all 5 difficulties, levels 1–72; all gameplay suites pass; no JS errors.
 - **[commit]:** 9595429
 
+### 019 — 2026-07-21 — Curve: size-triggered parse-3, decisive increments
+- **File:** `js/config.js` (`PARSE_LATE_ABOVE`), `js/game.js`, `js/util.js`
+- **What:** Parse-3 now triggers on the goal's SIZE (>10k), not the section, and
+  increments are floored so goals move decisively.
+- **⚠ Fixed:** Royal's L24 was ballooning to 30,000 (3.5× in one section).
+- **[commit]:** ab087a8
+
+### 020 — 2026-07-21 — Curve nerf: Note peaks at 10k
+- **File:** `js/config.js`, `js/game.js`
+- **What:** Note's last pre-endless boss is now exactly 10,000 (was 20,000).
+  DELTA 60→70, DELTA_GROWTH 40→20, DD_GROWTH 15→2, BOSS_MULT 1.2→1.16. DD floors
+  one digit below delta's and starts from round 3; both floors track parse depth.
+- **⚠ Fixed:** the grain floors — not DELTA/DD — had been driving the whole
+  curve, causing a +55% single step and 2.4× sections at magnitude crossings.
+- **[commit]:** c26abad
+
+### 021 — 2026-07-21 — Stacking difficulty challenges
+- **File:** `js/content.js` (`CHALLENGES`), `js/config.js`, `js/game.js`,
+  `js/shop.js`, `js/ui.js`, `css/style.css`, `index.html`
+- **What:** Each paper size above Note adds a standing rule, cumulative:
+  Letter **Postage** (Books +1 ticket), Demy **Short Measure** (−1 hand slug),
+  Royal **Rationed Ink** (−1 reroll). Shown as themed cards under the picker.
+- **[commit]:** 6a87070
+
+### 022 — 2026-07-21 — Wildfire + the nine Charring Bosses
+- **File:** `index.html` (charred seal + 9 emblems), `js/content.js`
+  (`BOSSES_IMPERIAL`), `js/game.js`, `js/scoring.js`, `js/shop.js`, `js/ui.js`,
+  `css/style.css`
+- **What:** Imperial's crimson **Wildfire** replaces every boss with a Charring
+  Boss on a new torn, ember-glowing seal: The Purge, Label Tax, The Critique,
+  The Post, The Big Question, The Scribble, The Clock, Magic Trick, The Zero One.
+- **New hooks:** boss `letterSetup`, `step.noBooks` (a muted slug skips
+  letter-Books too), `goalMult`, `forcePlays`, boss `onRoundWin`, banned-Book
+  list, bankruptcy flag.
+- **[commit]:** 5971966
+
 <!--
 ENTRY TEMPLATE (copy for each new edit):
 
