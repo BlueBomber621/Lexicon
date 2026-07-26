@@ -103,9 +103,11 @@ class Game {
     // can name exactly what you'd be taking.
     this.skipOffer = this.isSkipLevel
       ? BOONS[Math.floor(Math.random() * BOONS.length)].id : null;
-    this.handSize = CFG.RACK_SIZE;
-    this.plays = CFG.PLAYS_PER_ROUND;
-    this.rerolls = CFG.REROLLS_PER_ROUND;
+    // Difficulty challenges bite first (Short Measure's hand, Rationed Ink's
+    // reroll), before starting-case mods and Books get their say.
+    this.handSize = CFG.RACK_SIZE + this.challengeMod('handDelta');
+    this.plays = CFG.PLAYS_PER_ROUND + this.challengeMod('playsDelta');
+    this.rerolls = CFG.REROLLS_PER_ROUND + this.challengeMod('rerollsDelta');
     // Starting-case round mods (The Jobbing Case's -1 reroll, etc.)
     if (this.deckDef.mods) {
       this.plays += this.deckDef.mods.plays || 0;
@@ -143,6 +145,30 @@ class Game {
   // 0-based index of the section the run is in.
   get section() {
     return Math.floor((this.level - 1) / CFG.BOSS_EVERY);
+  }
+
+  // --- Difficulty challenges ---------------------------------------------
+
+  // Every challenge this run carries: the chosen difficulty's own, plus all of
+  // them beneath it. Note carries none. Static so the difficulty picker can
+  // list a size's challenges before a run exists.
+  static challengesFor(difficulty) {
+    const out = [];
+    for (let i = 1; i <= (difficulty || 0); i++) {
+      const id = CFG.DIFFICULTIES[i] && CFG.DIFFICULTIES[i].challenge;
+      const def = id && CHALLENGES.find((c) => c.id === id);
+      if (def) out.push(def);
+    }
+    return out;
+  }
+
+  get challenges() {
+    return Game.challengesFor(this.difficulty);
+  }
+
+  // Summed value of one challenge modifier across every active challenge.
+  challengeMod(key) {
+    return this.challenges.reduce((n, c) => n + ((c.mods && c.mods[key]) || 0), 0);
   }
 
   get isSkipLevel() {

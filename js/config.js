@@ -98,12 +98,15 @@ const CFG = {
   // The curve nerf: these are deliberately gentler than a raw difficulty
   // ladder, because each step up also carries its own rule modifiers — the
   // score goal is only half of what makes a paper size hard.
+  // `challenge` names the standing rule modifier this size ADDS; a run carries
+  // its own challenge plus every one below it (see CHALLENGES in content.js).
+  // Note is clean — nothing but the numbers.
   DIFFICULTIES: [
-    { id: 'note', name: 'Note', mult: 1, icon: 'icon-diff-note' },
-    { id: 'letter', name: 'Letter', mult: 1.5, icon: 'icon-diff-letter' },
-    { id: 'demy', name: 'Demy', mult: 2, icon: 'icon-diff-demy' },
-    { id: 'royal', name: 'Royal', mult: 3, icon: 'icon-diff-royal' },
-    { id: 'imperial', name: 'Imperial', mult: 5, icon: 'icon-diff-imperial' },
+    { id: 'note', name: 'Note', mult: 1, icon: 'icon-diff-note', challenge: null },
+    { id: 'letter', name: 'Letter', mult: 1.5, icon: 'icon-diff-letter', challenge: 'postage' },
+    { id: 'demy', name: 'Demy', mult: 2, icon: 'icon-diff-demy', challenge: 'short-measure' },
+    { id: 'royal', name: 'Royal', mult: 3, icon: 'icon-diff-royal', challenge: 'rationed-ink' },
+    { id: 'imperial', name: 'Imperial', mult: 5, icon: 'icon-diff-imperial', challenge: null },
   ],
 
   // Sticker odds: chance a shop Book carries one, then rarity weights

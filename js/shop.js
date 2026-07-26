@@ -61,7 +61,9 @@ class Shop {
   // Slip marks one offer free outright.
   bookCost(offer) {
     if (offer.free) return 0;
-    return Math.max(1, offer.def.cost + (offer.sticker ? (offer.sticker.costDelta || 0) : 0));
+    // Postage (a Letter+ challenge) adds to every Book's price.
+    return Math.max(1, offer.def.cost + (offer.sticker ? (offer.sticker.costDelta || 0) : 0)
+      + this.game.challengeMod('bookCost'));
   }
 
   // A sundry's price — a Sundry Voucher marks one of them free.

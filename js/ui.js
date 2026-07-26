@@ -1671,12 +1671,33 @@ class UI {
       <p class="picker-hint">Every case starts a fresh run${save ? ', replacing the one above' : ''}.</p>
       <div class="shop-section-title">PAPER SIZE — difficulty</div>
       <div class="diff-row">${diffs}</div>
+      ${this.challengeList(this.diffChoice)}
       <div class="shop-section-title">THE CASE — starting deck</div>
       <div class="lib-grid">${cards}</div>
       <div class="shop-foot">
         <span></span>
         ${canCancel ? '<button class="btn" data-act="cancel-deck">KEEP CURRENT RUN</button>' : ''}
       </div>`;
+  }
+
+  // The standing rule modifiers a paper size carries — its own and every one
+  // beneath it. Each is a bordered card themed to its challenge's colour.
+  challengeList(difficulty) {
+    const list = Game.challengesFor(difficulty);
+    if (list.length === 0) {
+      return `<p class="chal-none">A clean sheet — Note adds no rules of its own.</p>`;
+    }
+    const cards = list.map((c) => `
+      <div class="chal-box" style="--chal:${c.color}">
+        <span class="chal-icon"><svg viewBox="0 0 48 48"><use href="#${c.icon}"/></svg></span>
+        <div>
+          <div class="chal-title">${c.name}</div>
+          <div class="chal-desc">${c.desc}</div>
+        </div>
+      </div>`).join('');
+    return `<div class="chal-list">
+      <div class="chal-lead">${list.length} standing rule${list.length > 1 ? 's' : ''}, stacked:</div>
+      ${cards}</div>`;
   }
 
   onDeckPickClick(e) {

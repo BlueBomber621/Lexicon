@@ -1258,6 +1258,29 @@ const ACHIEVEMENTS = [
     test: (d, game) => game.unlocks.profile.wordsForged >= 100 },
 ];
 
+// --- Difficulty challenges -------------------------------------------------
+// Every paper size above Note carries a standing rule modifier, and they
+// STACK: a difficulty runs its own challenge plus every one beneath it. Note
+// has none. `mods` are summed by Game.challengeMod and read at the places they
+// bite; `color` themes the card shown under the difficulty picker.
+//   bookCost    — added to every Book's price in the Foundry
+//   handDelta   — added to the hand size each round
+//   rerollsDelta— added to the reroll charges each round
+
+const CHALLENGES = [
+  { id: 'postage', name: 'Postage', icon: 'icon-chal-postage', color: '#3f7fd0',
+    desc: 'Books cost 1 ticket more to buy.',
+    mods: { bookCost: 1 } },
+
+  { id: 'short-measure', name: 'Short Measure', icon: 'icon-chal-short-measure', color: '#2f7d68',
+    desc: 'Your hand holds one fewer slug.',
+    mods: { handDelta: -1 } },
+
+  { id: 'rationed-ink', name: 'Rationed Ink', icon: 'icon-chal-rationed-ink', color: '#b06a2f',
+    desc: 'One fewer reroll every round.',
+    mods: { rerollsDelta: -1 } },
+];
+
 // --- Boons (the slips you take instead of running a stage) -----------------
 // Skipping stage CFG.SKIP_ROUND of a section forfeits its tickets and score
 // but hands you one of these. A boon is a STANDING promise: it sits in
