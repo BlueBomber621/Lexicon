@@ -92,8 +92,11 @@ const CFG = {
     ENDLESS: { DELTA_MULT: 1.5, DELTA_MULT_GROWTH: 0.2, BOSS_BONUS: 10 },
   },
 
-  TICKETS_PER_LETTER: 2,    // tickets = longest word length that round × this
-  TICKETS_PER_PLAY_LEFT: 2, // + this for each unused play at round end
+  // Payouts stay at 1 apiece: the doubled values came from the simulator-tuned
+  // pass, which ran against a much steeper goal curve. Against the current
+  // (nerfed) curve they made tickets far too easy to come by.
+  TICKETS_PER_LETTER: 1,    // tickets = longest word length that round × this
+  TICKETS_PER_PLAY_LEFT: 1, // + this for each unused play at round end
   BOSS_EVERY: 6,            // every 6th level is a boss with a rule modifier
   WIN_BOSSES: 7,            // beating this many bosses WINS the run; beyond is Endless
   SHOP_EVERY: 2,            // the shop opens after every 2nd level cleared
