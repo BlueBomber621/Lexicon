@@ -9,6 +9,29 @@ class Shop {
     this.bags = [];
     this.consumables = [];
     this.lastBagGot = null; // tiles from the most recent bag, for the UI toast
+    this.locks = { book: [], bag: [], cons: [] }; // pinned offer ids
+  }
+
+  // --- Locks: pin an offer so restocks (and the next Foundry) keep it -----
+
+  isLocked(kind, id) {
+    return !!(this.locks && this.locks[kind] && this.locks[kind].includes(id));
+  }
+
+  toggleLock(kind, id) {
+    if (!this.locks) this.locks = { book: [], bag: [], cons: [] };
+    const list = this.locks[kind];
+    if (!list) return false;
+    const i = list.indexOf(id);
+    if (i === -1) list.push(id); else list.splice(i, 1);
+    return i === -1; // true when it is now locked
+  }
+
+  // A bought (or otherwise spent) offer shouldn't stay pinned.
+  clearLock(kind, id) {
+    if (!this.locks || !this.locks[kind]) return;
+    const i = this.locks[kind].indexOf(id);
+    if (i !== -1) this.locks[kind].splice(i, 1);
   }
 
   open() {
@@ -19,9 +42,19 @@ class Shop {
   }
 
   stock() {
-    this.books = this.pickBooks(CFG.SHOP_BOOK_OFFERS);
-    this.bags = this.pickBags(CFG.SHOP_BAG_OFFERS);
-    this.consumables = this.pickConsumables(CFG.SHOP_CONSUMABLE_OFFERS);
+    // Locked offers are held back and re-listed first; only the remaining
+    // slots are re-rolled. Locks are keyed by id (bags and sundries are shared
+    // definition objects, so a flag can't live on them).
+    const keptBooks = (this.books || []).filter((o) => this.isLocked('book', o.def.id));
+    const keptBags = (this.bags || []).filter((b) => this.isLocked('bag', b.id));
+    const keptCons = (this.consumables || []).filter((c) => this.isLocked('cons', c.id));
+
+    this.books = keptBooks.concat(
+      this.pickBooks(CFG.SHOP_BOOK_OFFERS - keptBooks.length, keptBooks.map((o) => o.def.id)));
+    this.bags = keptBags.concat(
+      this.pickBags(CFG.SHOP_BAG_OFFERS - keptBags.length, keptBags.map((b) => b.id)));
+    this.consumables = keptCons.concat(
+      this.pickConsumables(CFG.SHOP_CONSUMABLE_OFFERS - keptCons.length, keptCons.map((c) => c.id)));
     this.penPack = true; // one pen pack per shop visit
     this.freeConsumable = null; // set by a Sundry Voucher boon
     this.freePen = false;       // set by an Ink Requisition boon
@@ -33,11 +66,13 @@ class Shop {
   // Rarity-weighted draw of UNLOCKED Books the player doesn't own, no
   // duplicates. Each offer may roll a sticker (see STICKERS in content.js);
   // offers are { def, sticker } where sticker may be null.
-  pickBooks(n) {
-    // Books The Purge burnt never come back this run.
+  pickBooks(n, exclude = []) {
+    // Books The Purge burnt never come back this run; `exclude` keeps a
+    // locked offer from being drawn a second time alongside itself.
     const pool = BOOKS.filter((b) =>
       !this.game.books.owns(b.id) && this.game.unlocks.isUnlocked(b)
-      && !(this.game.bannedBooks || []).includes(b.id));
+      && !(this.game.bannedBooks || []).includes(b.id)
+      && !exclude.includes(b.id));
     const out = [];
     while (out.length < n && pool.length > 0) {
       const weighted = [];
@@ -88,8 +123,8 @@ class Shop {
   }
 
   // Distinct random tile-bag offers, rarity-weighted like Books.
-  pickBags(n) {
-    const pool = BAGS.slice();
+  pickBags(n, exclude = []) {
+    const pool = BAGS.filter((b) => !exclude.includes(b.id));
     const out = [];
     while (out.length < n && pool.length > 0) {
       const weighted = [];
@@ -105,8 +140,8 @@ class Shop {
 
   // Distinct weighted consumable offers — the pricey slips (Sticker, The
   // Typewriter) surface far less often than the workaday ones.
-  pickConsumables(n) {
-    const pool = CONSUMABLES.slice();
+  pickConsumables(n, exclude = []) {
+    const pool = CONSUMABLES.filter((c) => !exclude.includes(c.id));
     const out = [];
     while (out.length < n && pool.length > 0) {
       const weighted = [];
@@ -146,6 +181,7 @@ class Shop {
     const keep = offer.sticker && !offer.sticker.removedOnBuy ? offer.sticker.id : null;
     if (!this.game.books.add(offer.def, keep)) return false;
     this.spend(cost);
+    this.clearLock('book', offer.def.id);
     this.books.splice(index, 1);
     this.game.progress('buy', { kind: 'book' });
     return true;
@@ -196,6 +232,7 @@ class Shop {
     const bag = this.bags[index];
     if (!bag || !this.canAfford(bag.cost)) return false;
     this.spend(bag.cost);
+    this.clearLock('bag', bag.id);
     this.game.progress('buy', { kind: 'bag' });
     this.game.progress('bag', { bagId: bag.id }); // The Switch unlocks on Peculiars
 
@@ -233,6 +270,7 @@ class Shop {
     if (!this.canAfford(cost)) return false;
     if (!this.game.addConsumable(def)) return false; // slots full
     this.spend(cost);
+    this.clearLock('cons', def.id);
     // The voucher is spent with its offer; later offers shift down by one.
     if (this.freeConsumable === index) this.freeConsumable = null;
     else if (this.freeConsumable > index) this.freeConsumable--;

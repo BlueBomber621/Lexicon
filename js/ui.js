@@ -171,11 +171,50 @@ class UI {
     }
     if (this.game.newUnlocks.length === 0) return;
     const fresh = this.game.newUnlocks.splice(0);
-    const label = (e) => `${e.kind === 'deck' ? 'CASE' : 'BOOK'} UNLOCKED — ${e.name}`;
     Sfx.unlock();
-    this.toast(fresh.map(label).join('  ·  '));
+    // Unlocks used to flash past in the 1.8s toast, several concatenated into
+    // one line. They get their own dismissible corner card each now, and stay
+    // flagged in the Library until you've actually gone and looked at them.
+    for (const e of fresh) {
+      this.game.unlocks.markUnseen(e.id);
+      this.showUnlockCard(e);
+    }
+    this.syncLibraryButton();
+  }
+
+  // The Library button, with a badge for unlocks you haven't looked at yet.
+  syncLibraryButton() {
+    const n = this.game.unlocks.unseenCount;
     this.els['btn-library'].textContent =
-      `LIBRARY ${this.game.unlocks.unlockedCount}/${BOOKS.length}`;
+      `LIBRARY ${this.game.unlocks.unlockedCount}/${BOOKS.length}` + (n ? ` (${n} NEW)` : '');
+    this.els['btn-library'].classList.toggle('has-new', n > 0);
+  }
+
+  // One corner card per unlock: cover art, what it is, and a close button.
+  // It waits for a dismiss rather than expiring on its own.
+  showUnlockCard(entry) {
+    const layer = this.els['achievements'];
+    if (!layer) return;
+    const isDeck = entry.kind === 'deck';
+    const art = isDeck
+      ? `<span class="deck-icon"><svg viewBox="0 0 48 48"><use href="#${entry.icon}"/></svg></span>`
+      : this.bookArt(entry, 'book-icon-sm');
+    const pop = document.createElement('div');
+    pop.className = 'ach-pop unlock-pop';
+    pop.innerHTML =
+      `<span class="ach-icon">${art}</span>` +
+      `<div class="ach-text">` +
+        `<div class="ach-eyebrow">${isDeck ? 'CASE' : 'BOOK'} UNLOCKED</div>` +
+        `<div class="ach-title">${entry.name}</div>` +
+        `<div class="ach-desc">${entry.desc || ''}</div>` +
+      `</div>` +
+      `<button class="ach-close" aria-label="Dismiss">&times;</button>`;
+    pop.querySelector('.ach-close').addEventListener('click', () => {
+      pop.classList.add('ach-dismissed');
+      setTimeout(() => pop.remove(), 220);
+      Sfx.click();
+    });
+    layer.appendChild(pop);
   }
 
   // Pop up any achievements earned since the last drain (called from the
@@ -296,7 +335,13 @@ class UI {
 
   // Rich hover content for a Book: name, rarity, effect, live scaling, sticker.
   bookTip(book) {
-    const status = book.status ? book.status(this.game.books.stateOf(book), this.game) : null;
+    // A Book you don't own yet has no scaling state — in the Foundry and the
+    // Library that's every offer. Fall back to its starting state so a scaling
+    // Book still shows what it opens at instead of throwing (which silently
+    // killed the tooltip for all 14 of them).
+    const state = this.game.books.stateOf(book)
+      || (book.initState ? { ...book.initState } : null);
+    const status = (book.status && state) ? book.status(state, this.game) : null;
     const sticker = this.game.books.stickerOf(book);
     let html = `<div class="tip-name">${book.name}</div>`
       + `<div class="tip-sub r-${book.rarity}">${book.rarity.toUpperCase()}</div>`
@@ -857,6 +902,14 @@ class UI {
         + `<div class="tip-line tip-status">${CFG.PEN_PACK_COST} TK</div>`;
     }
     return '';
+  }
+
+  // The pin on a shop offer. Locked offers survive a restock and carry over to
+  // the next Foundry, so you can save up for something you can't afford yet.
+  lockPip(kind, id, locked) {
+    return `<button class="lock-pip ${locked ? 'on' : ''}" data-lock-kind="${kind}"`
+      + ` data-lock-id="${id}" title="${locked ? 'Held — click to release' : 'Hold this for later'}">`
+      + `<svg viewBox="0 0 24 24"><use href="#icon-lock-${locked ? 'on' : 'off'}"/></svg></button>`;
   }
 
   consTip(c) {
@@ -1688,7 +1741,9 @@ class UI {
           const donated = offer.sticker && offer.sticker.noSlot;
           const blocked = (g.books.isFull && !donated) ? 'SHELF FULL'
             : (!s.canAfford(cost) ? tk(cost) : null);
-          return `<div class="shop-item ${blocked ? 'blocked' : ''}" data-kind="book" data-i="${i}">
+          const lockedB = s.isLocked('book', b.id);
+          return `<div class="shop-item ${blocked ? 'blocked' : ''} ${lockedB ? 'locked' : ''}" data-kind="book" data-i="${i}">
+            ${this.lockPip('book', b.id, lockedB)}
             ${this.bookArt(b, '', offer.sticker)}
             <span class="shop-item-name">${b.name}</span>
             <span class="shop-item-cost r-${b.rarity}">${cost === 0 ? 'FREE' : tk(cost)}</span>
@@ -1704,7 +1759,8 @@ class UI {
       : '';
 
     const bagCards = s.bags.length === 0 ? '<p class="sold-out">Sold out.</p>'
-      : s.bags.map((b, i) => `<div class="shop-item ${s.canAfford(b.cost) ? '' : 'blocked'}" data-kind="bag" data-i="${i}">
+      : s.bags.map((b, i) => `<div class="shop-item ${s.canAfford(b.cost) ? '' : 'blocked'} ${s.isLocked('bag', b.id) ? 'locked' : ''}" data-kind="bag" data-i="${i}">
+          ${this.lockPip('bag', b.id, s.isLocked('bag', b.id))}
           <span class="bag-icon r-${b.rarity}"><svg viewBox="0 0 48 48"><use href="#${b.icon}"/></svg></span>
           <span class="shop-item-name">${b.name}</span>
           <span class="shop-item-cost r-${b.rarity}">${tk(b.cost)}</span>
@@ -1715,7 +1771,9 @@ class UI {
           const cCost = s.consumableCost(i);
           const blocked = g.consumables.length >= CFG.CONSUMABLE_SLOTS ? 'POCKETS FULL'
             : (!s.canAfford(cCost) ? tk(cCost) : null);
-          return `<div class="shop-item ${blocked ? 'blocked' : ''} ${c.rare ? 'slip-rare' : ''}" data-kind="cons" data-i="${i}">
+          const lockedC = s.isLocked('cons', c.id);
+          return `<div class="shop-item ${blocked ? 'blocked' : ''} ${c.rare ? 'slip-rare' : ''} ${lockedC ? 'locked' : ''}" data-kind="cons" data-i="${i}">
+            ${this.lockPip('cons', c.id, lockedC)}
             ${this.slipArt(c)}
             <span class="shop-item-name">${c.name}</span>
             <span class="shop-item-cost">${cCost === 0 ? 'FREE' : tk(cCost)}</span>
@@ -2126,10 +2184,12 @@ class UI {
   toggleLibrary() {
     const lib = this.els['library'];
     if (lib.classList.contains('hidden')) {
-      this.renderLibrary();
+      this.renderLibrary(); // renders NEW flags, then clears them on the way out
       lib.classList.remove('hidden');
     } else {
       lib.classList.add('hidden');
+      this.game.unlocks.clearUnseen(); // you've had your look
+      this.syncLibraryButton();
     }
     Sfx.click();
   }
@@ -2153,7 +2213,9 @@ class UI {
           <div class="lib-lock">&#128274; ${b.unlock.desc}</div>
         </div>`;
       }
-      return `<div class="lib-card">
+      const isNew = g.unlocks.isUnseen(b.id);
+      return `<div class="lib-card${isNew ? ' lib-new' : ''}">
+        ${isNew ? '<span class="lib-new-flag">NEW</span>' : ''}
         ${this.bookArt(b, 'book-icon-lg')}
         <div class="lib-name">${b.name}${owned ? ' <span class="lib-owned">&#9679; SHELVED</span>' : ''}</div>
         <div class="rarity r-${b.rarity}">${b.rarity.toUpperCase()}</div>
@@ -2168,9 +2230,10 @@ class UI {
         <h2>THE LIBRARY</h2>
         <div class="shop-tickets">${g.unlocks.unlockedCount}/${BOOKS.length} DISCOVERED</div>
       </div>
-      <div class="lib-progress">Lifetime: ${p.wordsForged} words forged &middot;
-        ${p.rerollsUsed} rerolls &middot; ${p.purgedTiles} tiles destroyed &middot;
-        ${p.ticketsEarned} tickets &middot; ${p.bossesBeaten} bosses beaten</div>
+      <div class="lib-progress">Lifetime: ${Util.fmt(p.runsPlayed)} runs &middot;
+        ${Util.fmt(p.wordsForged)} words forged &middot;
+        ${Util.fmt(p.rerollsUsed)} rerolls &middot; ${Util.fmt(p.purgedTiles)} tiles destroyed &middot;
+        ${Util.fmt(p.ticketsEarned)} tickets &middot; ${p.bossesBeaten} bosses beaten</div>
       <div class="lib-grid">${cards}</div>
       <div class="shop-foot">
         <span></span>
@@ -2179,6 +2242,17 @@ class UI {
   }
 
   onShopClick(e) {
+    // The lock pip is inside the tile, so it has to be checked first or the
+    // buy menu would open underneath it.
+    const pip = e.target.closest('.lock-pip');
+    if (pip) {
+      const nowLocked = this.shop.toggleLock(pip.dataset.lockKind, pip.dataset.lockId);
+      Sfx.click();
+      this.closeCardMenu();
+      this.renderShop();
+      this.toast(nowLocked ? 'Held for later' : 'Released');
+      return;
+    }
     // A compact offer tile: click reveals its BUY action (click again closes).
     const item = e.target.closest('.shop-item');
     if (item) {
