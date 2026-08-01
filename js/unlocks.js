@@ -28,6 +28,7 @@ class Unlocks {
       jesterPenUsed: 0,  // Jester's Pen inkings
       maxDiffBeaten: -1, // highest difficulty index whose boss you've beaten
       stickersSeen: [],  // every sticker kind you've ever owned
+      unseen: [],        // ids unlocked but not yet looked at in the Library
       itemsBought: 0,    // Foundry purchases (Business Contract / Coupon / Insurance)
       heavyLettersPlayed: 0, // slugs worth 8+ points played (The Bodkin)
     };
@@ -73,6 +74,30 @@ class Unlocks {
 
   get unlockedCount() {
     return BOOKS.filter((b) => this.isUnlocked(b)).length;
+  }
+
+  // --- "New since you last looked" ---------------------------------------
+  // An unlock stays flagged until the Library has actually been opened, so a
+  // pop-up that scrolls by is never the only chance to see what you earned.
+
+  markUnseen(id) {
+    const p = this.profile;
+    if (!p.unseen) p.unseen = [];
+    if (!p.unseen.includes(id)) { p.unseen.push(id); this.save(); }
+  }
+
+  isUnseen(id) {
+    return !!(this.profile.unseen && this.profile.unseen.includes(id));
+  }
+
+  get unseenCount() {
+    return (this.profile.unseen || []).length;
+  }
+
+  clearUnseen() {
+    if (this.unseenCount === 0) return;
+    this.profile.unseen = [];
+    this.save();
   }
 
   // Feed a play event in: lifetime counters update, then every still-locked
