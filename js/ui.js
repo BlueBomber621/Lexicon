@@ -778,15 +778,18 @@ class UI {
           g.tickets += val; g.bin = null; g.binState = null; g.binSticker = null;
           Sfx.buy(); this.closeCardMenu(); this.saveRun(); this.render(); if (this.binUsable()) this.renderShop();
         } },
-    ]);
+    ], this.bookTip(g.bin));
   }
 
   // --- Card action menu (long-press / right-click) -------------------------
-  openCardMenu(anchor, title, actions) {
+  // `detail` is the item's tooltip HTML. Touch screens have no hover, so the
+  // tap menu is the only place a phone can read what an offer actually does.
+  openCardMenu(anchor, title, actions, detail = '') {
     if (!anchor) return;
     this._menuActions = actions;
     const menu = this.els['cardmenu'];
     menu.innerHTML = `<div class="cardmenu-title">${title}</div>`
+      + (detail ? `<div class="cardmenu-detail">${detail}</div>` : '')
       + actions.map((a, i) => `<button class="btn btn-tiny ${a.cls || ''}" data-mi="${i}" ${a.disabled ? 'disabled' : ''}>${a.label}</button>`).join('');
     menu.classList.remove('hidden');
     this.hideTip();
@@ -795,7 +798,8 @@ class UI {
     let left = r.left + r.width / 2 - mw / 2;
     let top = r.bottom + 6;
     left = Math.max(6, Math.min(left, window.innerWidth - mw - 6));
-    if (top + mh > window.innerHeight - 6) top = Math.max(6, r.top - mh - 6);
+    if (top + mh > window.innerHeight - 6) top = r.top - mh - 6;
+    top = Math.max(6, Math.min(top, window.innerHeight - mh - 6));
     menu.style.left = `${left}px`;
     menu.style.top = `${top}px`;
   }
@@ -835,7 +839,7 @@ class UI {
           this.shop.sellBook(book.id); Sfx.buy(); this.closeCardMenu();
           this.saveRun(); this.render(); if (this.binUsable()) this.renderShop();
         } },
-    ]);
+    ], this.bookTip(book));
   }
 
   // A shop offer: click reveals BUY (or why it's blocked). Reuses the real
@@ -864,7 +868,7 @@ class UI {
     this.openCardMenu(anchor, title, [
       { label: blocked || `BUY · ${cost} TK`, cls: 'btn-buy', disabled: !!blocked,
         run: blocked ? null : () => this.doBuy(kind, i) },
-    ]);
+    ], this.shopItemTip(anchor));
   }
 
   // Shared purchase resolution (mirrors the old data-act buy branches).
@@ -893,7 +897,7 @@ class UI {
     }
     if (kind === 'bag' && s.bags[i]) {
       const b = s.bags[i];
-      return `<div class="tip-name">${b.name}</div><div class="tip-sub r-${b.rarity}">${b.rarity.toUpperCase()} · ${b.count} TILES</div>`
+      return `<div class="tip-name">${b.name}</div><div class="tip-sub r-${b.rarity}">${b.rarity.toUpperCase()} · ${b.options} PULLS</div>`
         + `<div class="tip-line">${b.desc}</div><div class="tip-line tip-status">${b.cost} TK</div>`;
     }
     if (kind === 'cons' && s.consumables[i]) return this.consTip(s.consumables[i]);
@@ -928,7 +932,7 @@ class UI {
       { label: `SELL · ${val} TK`, cls: 'btn-danger', run: () => {
           g.sellConsumable(i); Sfx.buy(); this.closeCardMenu(); this.saveRun(); this.render();
         } },
-    ]);
+    ], this.consTip(c));
   }
 
   useConsumableAt(index) {

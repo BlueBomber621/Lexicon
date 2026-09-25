@@ -311,6 +311,19 @@ it and bump the "through entry NNN".
   list, bankruptcy flag.
 - **[commit]:** 5971966
 
+### 023 — 2026-09-25 — Shop descriptions readable on phone
+- **File:** `js/ui.js` (`openCardMenu`, `openBuyMenu`, `openBookMenu`,
+  `openConsMenu`, `openBinMenu`, `shopItemTip`), `css/style.css` (`#cardmenu`)
+- **What:** The tap menu (BUY / SELL / USE) now shows the item's full details
+  above its button — rarity, effect, live "Currently:" value, sticker, flavour.
+  Applies to Foundry Books, bags, slips and the Pen Pack, plus owned shelf
+  Books, held slips and the Bin's stashed Book.
+- **Why:** Descriptions only lived in the hover tooltip, which is switched off
+  on touch screens (`hover: hover`), so a phone had no way to read an offer
+  before buying it.
+- **Also:** Bag tooltips read "undefined TILES" (bags have `options`, not
+  `count`) → now "5 PULLS".
+
 <!--
 ENTRY TEMPLATE (copy for each new edit):
 
