@@ -10,6 +10,9 @@ class Shop {
     this.consumables = [];
     this.lastBagGot = null; // tiles from the most recent bag, for the UI toast
     this.locks = { book: [], bag: [], cons: [] }; // pinned offer ids
+    this.isOpen = false;  // true from open() until the Foundry is closed
+    this.pending = null;  // a paid-for bag / pen pack still awaiting its pick
+    game.shop = this;     // the run save snapshots the Foundry with the Game
   }
 
   // --- Locks: pin an offer so restocks (and the next Foundry) keep it -----
@@ -35,6 +38,8 @@ class Shop {
   }
 
   open() {
+    this.isOpen = true;
+    this.pending = null;
     this.game.decayRerollCost(); // a fresh shop relaxes the reroll price
     // The Coupon Book grants one free purchase per Foundry visit.
     this.game.freePurchase = this.game.books.owns('coupon-book');
@@ -289,6 +294,80 @@ class Shop {
     }
     this.game.books.dispatchGrow('sell', { def });
     return true;
+  }
+
+  close() {
+    this.isOpen = false;
+    this.pending = null;
+  }
+
+  // --- Save / resume ------------------------------------------------------
+  // Without this a refresh mid-Foundry re-ran open(): a free restock, the pen
+  // pack and Coupon Book back again, and an unfinished bag pick lost. Offers
+  // are saved by id and rehydrated against content.js. Locks are always kept
+  // (they carry between Foundries); the rest only while the Foundry is open.
+
+  serialize() {
+    const out = { locks: this.locks };
+    if (!this.isOpen) return out;
+    Object.assign(out, {
+      open: true,
+      books: this.books.map((o) => ({ id: o.def.id,
+        sticker: o.sticker ? o.sticker.id : null, free: !!o.free })),
+      bags: this.bags.map((b) => b.id),
+      consumables: this.consumables.map((c) => c.id),
+      penPack: this.penPack,
+      freeConsumable: this.freeConsumable,
+      freePen: this.freePen,
+      freePurchase: this.game.freePurchase,
+    });
+    const p = this.pending;
+    if (p && p.kind === 'bag') {
+      out.pending = { kind: 'bag', bagId: p.res.bag.id,
+        candidates: p.res.candidates.map((t) => ({ id: t.id, letter: t.letter,
+          variant: t.variant, alteration: t.alteration })) };
+    } else if (p && p.kind === 'pen') {
+      out.pending = { kind: 'pen', tiles: p.res.tiles.map((t) => t.id),
+        pens: p.res.pens.map((pen) => pen.id) };
+    }
+    return out;
+  }
+
+  restore(data) {
+    this.locks = (data && data.locks) || { book: [], bag: [], cons: [] };
+    this.isOpen = !!(data && data.open);
+    this.pending = null;
+    if (!this.isOpen) return;
+    const byId = (list, id) => list.find((x) => x.id === id);
+    this.books = (data.books || []).map((o) => {
+      const def = byId(BOOKS, o.id);
+      if (!def) return null;
+      const offer = { def, sticker: o.sticker ? (STICKERS[o.sticker] || null) : null };
+      if (o.free) offer.free = true;
+      return offer;
+    }).filter(Boolean);
+    this.bags = (data.bags || []).map((id) => byId(BAGS, id)).filter(Boolean);
+    this.consumables = (data.consumables || []).map((id) => byId(CONSUMABLES, id)).filter(Boolean);
+    this.penPack = !!data.penPack;
+    this.freeConsumable = data.freeConsumable == null ? null : data.freeConsumable;
+    this.freePen = !!data.freePen;
+    this.game.freePurchase = !!data.freePurchase;
+    const p = data.pending;
+    if (p && p.kind === 'bag') {
+      const bag = byId(BAGS, p.bagId);
+      if (bag) {
+        const candidates = (p.candidates || []).map((c) => {
+          const t = new Tile(c.letter, { variant: c.variant, alteration: c.alteration });
+          t.id = c.id;
+          return t;
+        });
+        this.pending = { kind: 'bag', res: { bag, candidates } };
+      }
+    } else if (p && p.kind === 'pen') {
+      const tiles = (p.tiles || []).map((id) => this.game.deck.all.find((t) => t.id === id)).filter(Boolean);
+      const pens = (p.pens || []).map((id) => byId(PENS, id)).filter(Boolean);
+      if (tiles.length && pens.length) this.pending = { kind: 'pen', res: { tiles, pens } };
+    }
   }
 
   restock() {

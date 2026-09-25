@@ -1610,12 +1610,8 @@ class UI {
     if (this.overlayKind === 'won') {
       if (this.game.shopDue) {
         this.shop.open();
-        this.els['shop-card'].classList.add('opening'); // one-time slide-in
-        this.renderShop();
-        this.els['playfield'].classList.add('shopping'); // shop takes over the play area
-        this.els['shop'].classList.remove('hidden');
-        this.renderBin(); // the Bin appears left of the shelf while shopping
-        setTimeout(() => this.els['shop-card'].classList.remove('opening'), 700);
+        this.showShop(true);
+        this.game.saveRun(); // the stock is fixed now — a refresh can't re-roll it
         return; // nextLevel happens when the shop closes
       }
       this.game.nextLevel();
@@ -1625,6 +1621,26 @@ class UI {
     } else {
       this.openDeckPick(); // NEW RUN goes through the case selection
     }
+  }
+
+  // Show the Foundry panel (fresh from a win card, or restored on resume).
+  showShop(slideIn) {
+    if (slideIn) {
+      this.els['shop-card'].classList.add('opening'); // one-time slide-in
+      setTimeout(() => this.els['shop-card'].classList.remove('opening'), 700);
+    }
+    this.renderShop();
+    this.els['playfield'].classList.add('shopping'); // shop takes over the play area
+    this.els['shop'].classList.remove('hidden');
+    this.renderBin(); // the Bin appears left of the shelf while shopping
+  }
+
+  hideShop() {
+    this.closeCardMenu();
+    this.els['picker'].classList.add('hidden');   // any half-made pick goes with it
+    this.els['penpick'].classList.add('hidden');
+    this.els['shop'].classList.add('hidden');
+    this.els['playfield'].classList.remove('shopping'); // play area returns
   }
 
   // The overlay's secondary button — only the skip offer uses it.
@@ -1806,6 +1822,7 @@ class UI {
 
   openPicker(res) {
     this.pendingBag = res;
+    this.shop.pending = { kind: 'bag', res }; // saved, so a refresh resumes the pick
     this.pickerChoice.clear();
     this.renderPicker();
     this.els['picker'].classList.remove('hidden');
@@ -1851,6 +1868,7 @@ class UI {
       this.shop.finalizeBag(kept);
       this.els['picker'].classList.add('hidden');
       this.pendingBag = null;
+      this.shop.pending = null;
       Sfx.buy();
       this.toast(kept.length ? this.describeBag(kept) : 'The sack goes back on the shelf, unspent.');
       this.renderShop();
@@ -1863,6 +1881,7 @@ class UI {
 
   openPenPick(res) {
     this.pendingPen = res; // { tiles, pens }
+    this.shop.pending = { kind: 'pen', res }; // saved, so a refresh resumes the pick
     this.penChoice = null;   // pen index
     this.penTileChoice = null; // tile index
     this.renderPenPick();
@@ -1916,6 +1935,7 @@ class UI {
       this.shop.finalizePen(chosenTile, chosenPen);
       this.els['penpick'].classList.add('hidden');
       this.pendingPen = null;
+      this.shop.pending = null;
       Sfx.buy();
       this.toast(`${chosenPen.name} inked ${chosenTile.letter}`);
       this.renderShop();
@@ -2106,6 +2126,7 @@ class UI {
       this.game.unlocks.profile.lastDifficulty = this.diffChoice;
       this.game.unlocks.save();
       this.placed.clear(); // fresh run: every tile settles anew
+      this.hideShop();
       this.game.newRun(id, this.diffChoice);
       this.els['deckpick'].classList.add('hidden');
       Sfx.buy();
@@ -2130,7 +2151,14 @@ class UI {
     this.els['deckpick'].classList.add('hidden');
     Sfx.buy();
     this.render();
-    if (this.game.state === 'roundWon') this.showOverlay('won');
+    this.hideShop();
+    if (this.shop.isOpen) {
+      // Saved mid-Foundry: reopen the same stock rather than rolling a new one.
+      this.showShop(false);
+      const p = this.shop.pending;
+      if (p && p.kind === 'bag') this.openPicker(p.res);
+      else if (p && p.kind === 'pen') this.openPenPick(p.res);
+    } else if (this.game.state === 'roundWon') this.showOverlay('won');
     else this.maybeOfferSkip(); // resumed onto an untouched skippable stage
     this.toast(`Resumed — level ${this.game.level}`);
   }
@@ -2254,6 +2282,7 @@ class UI {
       Sfx.click();
       this.closeCardMenu();
       this.renderShop();
+      this.game.saveRun();
       this.toast(nowLocked ? 'Held for later' : 'Released');
       return;
     }
@@ -2267,9 +2296,8 @@ class UI {
     const btn = e.target.closest('[data-act]');
     if (!btn) return;
     if (btn.dataset.act === 'close') {
-      this.closeCardMenu();
-      this.els['shop'].classList.add('hidden');
-      this.els['playfield'].classList.remove('shopping'); // play area returns
+      this.hideShop();
+      this.shop.close();
       this.game.nextLevel();
       this.render();
       this.game.saveRun(); // shop closed → next round is the new checkpoint
