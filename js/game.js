@@ -36,6 +36,7 @@ class Game {
     if (this.stats && this.stats.wordsForged > 0) {
       this.progress('runEnd', {});
     }
+    if (this.shop) this.shop.restore(null); // no Foundry or locks carry into a new run
     this.deckDef = DECKS.find((d) => d.id === (deckId || this.unlocks.profile.lastDeck))
       || DECKS[0];
     this.difficulty = difficulty != null ? difficulty
@@ -902,6 +903,7 @@ class Game {
       bookState: this.books.state, stickers: this.books.stickers,
       consumables: this.consumables.map((c) => c.id),
       state: this.state,
+      shop: this.shop ? this.shop.serialize() : null,
     };
   }
 
@@ -989,6 +991,7 @@ class Game {
     }
     this.state = data.state || 'playing';
     if (this.boss && this.state === 'playing') this.reapplyBossHooks();
+    if (this.shop) this.shop.restore(data.shop);
     return this;
   }
 

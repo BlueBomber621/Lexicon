@@ -324,6 +324,21 @@ it and bump the "through entry NNN".
 - **Also:** Bag tooltips read "undefined TILES" (bags have `options`, not
   `count`) → now "5 PULLS".
 
+### 024 — 2026-09-25 — Saved runs keep the Foundry (no refresh re-roll)
+- **File:** `js/shop.js` (`serialize` / `restore` / `close`, `isOpen`,
+  `pending`), `js/game.js` (`serialize` / `resume` / `newRun`), `js/ui.js`
+  (`showShop` / `hideShop`, `resumeRun`, pickers, lock toggle)
+- **What:** The run save now includes the open Foundry: its offers (with
+  stickers and free marks), pen pack, Coupon/voucher/requisition freebies,
+  locks, and a paid-for bag or pen pick still waiting on a choice. The save is
+  written the moment the Foundry opens, and Continue Run reopens that same
+  stock (and the unfinished pick) instead of the win card.
+- **Why:** A refresh in the Foundry re-ran `open()` — a free restock, the pen
+  pack and Coupon Book's free buy back again — so it could be cheated. A
+  refresh mid-pick also lost a bag you'd paid for.
+- **Before → After:** refresh = new stock → refresh = same stock. Locks also
+  no longer leak into a brand-new run.
+
 <!--
 ENTRY TEMPLATE (copy for each new edit):
 
