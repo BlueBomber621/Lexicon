@@ -1335,6 +1335,32 @@ body {
   margin-bottom: 2px;
 }
 #cardmenu .btn { width: 100%; }
+/* The item's details, shown above its action — the only way to read them on
+   a touch screen, where there is no hover. The title already names it. */
+#cardmenu { max-width: min(260px, calc(100vw - 12px)); }
+.cardmenu-detail {
+  font-size: 11px;
+  line-height: 1.45;
+  padding-bottom: 5px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid #c9bd9f;
+}
+.cardmenu-detail .tip-name { display: none; }
+.cardmenu-detail .tip-sub { font-size: 9px; letter-spacing: 1.5px; font-weight: 700; }
+.cardmenu-detail .tip-sub.r-common { color: #6b604b; }
+.cardmenu-detail .tip-sub.r-uncommon { color: #2f6b5c; }
+.cardmenu-detail .tip-sub.r-rare { color: #9a4a1c; }
+.cardmenu-detail .tip-line { margin-top: 3px; }
+.cardmenu-detail .tip-line b { color: #9a4a1c; }
+/* Price lines repeat the BUY button; the live "Currently:" status stays. */
+.cardmenu-detail .tip-status:not(:has(b)) { display: none; }
+.cardmenu-detail .tip-flavor {
+  margin-top: 5px;
+  font-style: italic;
+  color: #6b604b;
+  border-top: 1px dashed #c9bd9f;
+  padding-top: 4px;
+}
 
 /* Compact Foundry cards: trim the always-on text so the zones fit without a
    long scroll — the full flavour still lives on the Book covers / hover. */
